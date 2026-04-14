@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
+import { emitTenantEvent } from '../realtime/socket.js';
 
 const connectionSchema = z.object({
   name: z.string().min(1),
@@ -69,6 +70,10 @@ connectionsRouter.post('/', async (req, res, next) => {
       return next(error);
     }
 
+    emitTenantEvent(request.organizationId, 'connections:created', {
+      connection: data,
+    });
+
     res.status(201).json({ connection: data });
   } catch (error) {
     next(error);
@@ -98,6 +103,10 @@ connectionsRouter.patch('/:connectionId/status', async (req, res, next) => {
       return next(error);
     }
 
+    emitTenantEvent(request.organizationId, 'connections:updated', {
+      connection: data,
+    });
+
     res.json({ connection: data });
   } catch (error) {
     next(error);
@@ -122,6 +131,10 @@ connectionsRouter.delete('/:connectionId', async (req, res, next) => {
     if (error) {
       return next(error);
     }
+
+    emitTenantEvent(request.organizationId, 'connections:deleted', {
+      connectionId: req.params.connectionId,
+    });
 
     res.status(204).send();
   } catch (error) {

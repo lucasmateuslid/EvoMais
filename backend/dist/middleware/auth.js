@@ -1,3 +1,4 @@
+import { AppError } from '../errors/AppError.js';
 import { config } from '../config.js';
 import { adminSupabase, createUserSupabaseClient } from '../services/supabase.js';
 function extractBearerToken(req) {
@@ -44,5 +45,13 @@ export async function requireAuth(req, res, next) {
     req.userId = authData.user.id;
     req.organizationId = profile.organization_id;
     req.supabase = authedClient;
+    if (req.tenantOrganizationId && req.tenantOrganizationId !== profile.organization_id) {
+        return next(new AppError({
+            code: 'tenant_mismatch',
+            statusCode: 403,
+            domain: 'auth',
+            message: 'Authenticated organization does not match requested tenant subdomain.',
+        }));
+    }
     next();
 }

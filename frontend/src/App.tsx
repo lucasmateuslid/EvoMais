@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { useAuthStore } from './store/authStore';
 import { useThemeStore } from './store/themeStore';
+import { disconnectRealtimeSocket, getRealtimeSocket } from './services/realtimeService';
 
 import { AppLayout, PrivateRoute } from './components/layout/AppLayout';
 import { AdminLayout } from './components/layout/AdminLayout';
@@ -25,7 +26,7 @@ import AdminTenantsPage from './pages/admin/AdminTenantsPage';
 const queryClient = new QueryClient();
 
 export default function App() {
-  const { initialize } = useAuthStore();
+  const { initialize, accessToken } = useAuthStore();
   const { theme } = useThemeStore();
 
   useEffect(() => {
@@ -39,6 +40,15 @@ export default function App() {
       document.documentElement.classList.remove('dark');
     }
   }, [theme]);
+
+  useEffect(() => {
+    if (accessToken) {
+      getRealtimeSocket();
+      return;
+    }
+
+    disconnectRealtimeSocket();
+  }, [accessToken]);
 
   return (
     <QueryClientProvider client={queryClient}>

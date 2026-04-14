@@ -35,7 +35,7 @@ export default function AdminLoginPage() {
       sessionStorage.setItem('authToken', data.accessToken);
       sessionStorage.setItem('userProfile', JSON.stringify(data.profile));
       
-      navigate('/admin/tenants');
+      navigate('/admin/dashboard');
     } catch (err: any) {
       setError(err.message || 'Erro ao fazer login');
     } finally {

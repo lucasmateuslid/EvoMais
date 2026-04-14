@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 
 import { config } from '../config.js';
+import type { TenantAwareRequest } from '../middleware/tenant.js';
 import { adminSupabase } from '../services/supabase.js';
 
 const loginSchema = z.object({
@@ -11,6 +12,10 @@ const loginSchema = z.object({
 });
 
 export const authRouter = Router();
+
+function hasTenantMismatch(req: TenantAwareRequest, organizationId?: string | null) {
+  return Boolean(req.tenantOrganizationId && organizationId && req.tenantOrganizationId !== organizationId);
+}
 
 authRouter.post('/login', async (req, res, next) => {
   try {
@@ -51,8 +56,16 @@ authRouter.post('/login', async (req, res, next) => {
       return next(profileError);
     }
 
+    if (hasTenantMismatch(req as TenantAwareRequest, profile?.organization_id)) {
+      return res.status(403).json({
+        error: 'tenant_mismatch',
+        message: 'Authenticated profile does not belong to the current tenant subdomain.',
+      });
+    }
+
     res.json({
       accessToken: data.session.access_token,
+      refreshToken: data.session.refresh_token,
       user: data.user,
       profile: profile || null,
     });
@@ -84,6 +97,13 @@ authRouter.get('/me', async (req, res, next) => {
 
     if (profileError) {
       return next(profileError);
+    }
+
+    if (hasTenantMismatch(req as TenantAwareRequest, profile?.organization_id)) {
+      return res.status(403).json({
+        error: 'tenant_mismatch',
+        message: 'Authenticated profile does not belong to the current tenant subdomain.',
+      });
     }
 
     res.json({
@@ -138,6 +158,13 @@ authRouter.post('/super-admin/login', async (req, res, next) => {
       return next(profileError);
     }
 
+    if (hasTenantMismatch(req as TenantAwareRequest, profile?.organization_id)) {
+      return res.status(403).json({
+        error: 'tenant_mismatch',
+        message: 'Authenticated profile does not belong to the current tenant subdomain.',
+      });
+    }
+
     // Verify super_admin role
     if (!profile || profile.role !== 'super_admin') {
       return res.status(403).json({
@@ -148,6 +175,7 @@ authRouter.post('/super-admin/login', async (req, res, next) => {
 
     res.json({
       accessToken: data.session.access_token,
+      refreshToken: data.session.refresh_token,
       user: data.user,
       profile: profile,
     });

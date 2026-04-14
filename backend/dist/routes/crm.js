@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
+import { emitTenantEvent } from '../realtime/socket.js';
 const dealSchema = z.object({
     stage: z.enum(['prospeccao', 'qualificacao', 'proposta', 'negociacao', 'fechamento']),
     company: z.string().min(1),
@@ -60,6 +61,9 @@ crmRouter.post('/deals', async (req, res, next) => {
         if (error) {
             return next(error);
         }
+        emitTenantEvent(request.organizationId, 'crm:deal_created', {
+            deal: data,
+        });
         res.status(201).json({ deal: data });
     }
     catch (error) {
@@ -85,6 +89,9 @@ crmRouter.patch('/deals/:dealId', async (req, res, next) => {
         if (error) {
             return next(error);
         }
+        emitTenantEvent(request.organizationId, 'crm:deal_updated', {
+            deal: data,
+        });
         res.json({ deal: data });
     }
     catch (error) {
@@ -107,6 +114,9 @@ crmRouter.delete('/deals/:dealId', async (req, res, next) => {
         if (error) {
             return next(error);
         }
+        emitTenantEvent(request.organizationId, 'crm:deal_deleted', {
+            dealId,
+        });
         res.status(204).send();
     }
     catch (error) {

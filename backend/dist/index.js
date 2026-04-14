@@ -3,27 +3,44 @@ import cors from 'cors';
 import express from 'express';
 import { config } from './config.js';
 import { closeQueueConnections } from './jobs/queue.js';
+import { startWorkers, stopWorkers } from './jobs/worker.js';
+import { withCorrelationId } from './middleware/correlationId.js';
+import { resolveTenantFromHost } from './middleware/tenant.js';
 import { logger } from './logger.js';
+import { initializeRealtime, shutdownRealtime } from './realtime/socket.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { aiRouter } from './routes/ai.js';
 import { authRouter } from './routes/auth.js';
+import { chatRouter } from './routes/chat.js';
 import { connectionsRouter } from './routes/connections.js';
 import { crmRouter } from './routes/crm.js';
 import { evolutionRouter } from './routes/evolution.js';
 import { healthRouter } from './routes/health.js';
+import { metricsRouter } from './routes/metrics.js';
+import { tenantRouter, tenantsRouter } from './routes/tenants.js';
 import { teamRouter } from './routes/team.js';
+import { vendorsRouter } from './routes/vendors.js';
 import { webhookRouter } from './routes/webhook.js';
 import { initializeSentry } from './sentry.js';
 initializeSentry();
-// Redis desabilitado em desenvolvimento (sem REDIS_URL configurado)
-// Descomente quando tiver Redis rodando:
-// startWorkers();
+let workers = [];
+if (config.ENABLE_WORKERS && config.REDIS_URL) {
+    workers = startWorkers();
+}
+else {
+    logger.info({
+        enableWorkers: config.ENABLE_WORKERS,
+        hasRedisUrl: Boolean(config.REDIS_URL),
+    }, 'queue workers disabled');
+}
 const app = express();
 app.use(cors({
     origin: config.CORS_ORIGIN,
     credentials: true,
 }));
+app.use(withCorrelationId);
+app.use(resolveTenantFromHost);
 app.use(express.json({ limit: '1mb' }));
 app.use(requestLogger);
 app.get('/', (_req, res) => {
@@ -33,9 +50,14 @@ app.get('/', (_req, res) => {
     });
 });
 app.use('/health', healthRouter);
+app.use('/api/tenant', tenantRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/tenants', tenantsRouter);
 app.use('/api/team', teamRouter);
 app.use('/api/ai', aiRouter);
+app.use('/api/metrics', metricsRouter);
+app.use('/api/vendors', vendorsRouter);
+app.use('/api/chat', chatRouter);
 app.use('/api/connections', connectionsRouter);
 app.use('/api/crm', crmRouter);
 app.use('/api/evolution', evolutionRouter);
@@ -44,9 +66,12 @@ app.use(errorHandler);
 const server = app.listen(config.PORT, () => {
     logger.info({ port: config.PORT, environment: config.NODE_ENV }, 'backend listening');
 });
+initializeRealtime(server);
 async function shutdown(signal) {
     logger.info({ signal }, 'shutting down backend');
     server.close(async () => {
+        await stopWorkers(workers);
+        await shutdownRealtime();
         await closeQueueConnections();
         process.exit(0);
     });

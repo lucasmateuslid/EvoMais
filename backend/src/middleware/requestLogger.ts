@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 
 import { logger } from '../logger.js';
+import { getCorrelationId } from '../observability/requestContext.js';
 
 export function requestLogger(req: Request, res: Response, next: NextFunction) {
   const startedAt = Date.now();
@@ -14,6 +15,7 @@ export function requestLogger(req: Request, res: Response, next: NextFunction) {
         path: req.originalUrl,
         statusCode: res.statusCode,
         durationMs,
+        correlationId: getCorrelationId(),
       },
       'request completed',
     );

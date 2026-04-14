@@ -14,6 +14,12 @@ const configSchema = z.object({
   EVOLUTION_API_URL: z.string().url().default('http://localhost:8080'),
   EVOLUTION_GLOBAL_API_KEY: z.string().optional(),
   SENTRY_DSN: z.string().optional(),
+  ENABLE_WORKERS: z.coerce.boolean().default(false),
+  LOG_CORRELATION_ID: z.coerce.boolean().default(true),
+  ENABLE_TENANT_SUBDOMAIN: z.coerce.boolean().default(true),
+  TENANT_ROOT_DOMAIN: z.string().default('fulana.com'),
+  TENANT_LOCAL_ROOT_DOMAIN: z.string().default('fulana.local'),
+  ENABLE_WEBSOCKETS: z.coerce.boolean().default(true),
 });
 
 export const config = configSchema.parse(process.env);
@@ -23,6 +29,9 @@ export const isProduction = config.NODE_ENV === 'production';
 export const backendCapabilities = {
   supabase: Boolean(config.SUPABASE_URL && config.SUPABASE_SERVICE_ROLE_KEY && config.SUPABASE_ANON_KEY),
   redis: Boolean(config.REDIS_URL),
+  workers: config.ENABLE_WORKERS && Boolean(config.REDIS_URL),
+  tenantSubdomain: config.ENABLE_TENANT_SUBDOMAIN,
+  websockets: config.ENABLE_WEBSOCKETS,
   ai: Boolean(config.GEMINI_API_KEY || config.ANTHROPIC_API_KEY || config.GROQ_API_KEY),
   evolution: Boolean(config.EVOLUTION_API_URL),
   sentry: Boolean(config.SENTRY_DSN),

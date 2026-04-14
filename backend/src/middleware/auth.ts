@@ -1,10 +1,12 @@
 import type { NextFunction, Request, Response } from 'express';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { AppError } from '../errors/AppError.js';
 import { config } from '../config.js';
 import { adminSupabase, createUserSupabaseClient } from '../services/supabase.js';
+import type { TenantAwareRequest } from './tenant.js';
 
-export interface AuthenticatedRequest extends Request {
+export interface AuthenticatedRequest extends TenantAwareRequest {
   authToken?: string;
   userId?: string;
   organizationId?: string;
@@ -66,6 +68,17 @@ export async function requireAuth(req: AuthenticatedRequest, res: Response, next
   req.userId = authData.user.id;
   req.organizationId = profile.organization_id;
   req.supabase = authedClient;
+
+  if (req.tenantOrganizationId && req.tenantOrganizationId !== profile.organization_id) {
+    return next(
+      new AppError({
+        code: 'tenant_mismatch',
+        statusCode: 403,
+        domain: 'auth',
+        message: 'Authenticated organization does not match requested tenant subdomain.',
+      }),
+    );
+  }
 
   next();
 }

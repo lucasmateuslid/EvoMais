@@ -1,4 +1,4 @@
-import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
+import { Outlet, Link, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { Building2, LogOut, ShieldCheck, LayoutDashboard } from 'lucide-react';
 import { Logo } from '../ui/Logo';
 
@@ -6,8 +6,27 @@ export function AdminLayout() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const token = typeof window !== 'undefined' ? sessionStorage.getItem('authToken') : null;
+  const profileRaw = typeof window !== 'undefined' ? sessionStorage.getItem('userProfile') : null;
+
+  let profile: { role?: string } | null = null;
+  if (profileRaw) {
+    try {
+      profile = JSON.parse(profileRaw) as { role?: string };
+    } catch {
+      profile = null;
+    }
+  }
+
+  const isSuperAdmin = Boolean(token) && profile?.role === 'super_admin';
+
+  if (!isSuperAdmin) {
+    return <Navigate to="/admin/login" replace />;
+  }
+
   const handleLogout = () => {
-    // In a real app, clear admin session here
+    sessionStorage.removeItem('authToken');
+    sessionStorage.removeItem('userProfile');
     navigate('/admin/login');
   };
 

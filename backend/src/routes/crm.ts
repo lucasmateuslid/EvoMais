@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
+import { emitTenantEvent } from '../realtime/socket.js';
 import type { DealStage } from '../types/crm.js';
 
 const dealSchema = z.object({
@@ -76,6 +77,10 @@ crmRouter.post('/deals', async (req, res, next) => {
       return next(error);
     }
 
+    emitTenantEvent(request.organizationId, 'crm:deal_created', {
+      deal: data,
+    });
+
     res.status(201).json({ deal: data });
   } catch (error) {
     next(error);
@@ -106,6 +111,10 @@ crmRouter.patch('/deals/:dealId', async (req, res, next) => {
       return next(error);
     }
 
+    emitTenantEvent(request.organizationId, 'crm:deal_updated', {
+      deal: data,
+    });
+
     res.json({ deal: data });
   } catch (error) {
     next(error);
@@ -131,6 +140,10 @@ crmRouter.delete('/deals/:dealId', async (req, res, next) => {
     if (error) {
       return next(error);
     }
+
+    emitTenantEvent(request.organizationId, 'crm:deal_deleted', {
+      dealId,
+    });
 
     res.status(204).send();
   } catch (error) {

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Deal, DealStage } from '../types/crm';
 import { crmService } from '../services/crmService';
+import { getRealtimeSocket } from '../services/realtimeService';
 import { useAuthStore } from '../store/authStore';
 
 export function useCRM() {
@@ -30,6 +31,27 @@ export function useCRM() {
 
   useEffect(() => {
     fetchDeals();
+  }, [fetchDeals]);
+
+  useEffect(() => {
+    const socket = getRealtimeSocket();
+    if (!socket) {
+      return;
+    }
+
+    const refreshFromRealtime = () => {
+      void fetchDeals();
+    };
+
+    socket.on('crm:deal_created', refreshFromRealtime);
+    socket.on('crm:deal_updated', refreshFromRealtime);
+    socket.on('crm:deal_deleted', refreshFromRealtime);
+
+    return () => {
+      socket.off('crm:deal_created', refreshFromRealtime);
+      socket.off('crm:deal_updated', refreshFromRealtime);
+      socket.off('crm:deal_deleted', refreshFromRealtime);
+    };
   }, [fetchDeals]);
 
   const updateDealStage = async (dealId: string, newStage: DealStage) => {
