@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
-import { MessageSquare, ArrowRight, Loader2, ShieldCheck, Mail, Lock } from 'lucide-react';
-import { Logo, LogoIcon } from '../components/ui/Logo';
+import { ShieldCheck, Lock, Mail, Loader2 } from 'lucide-react';
+import { Logo, LogoIcon } from '../../components/ui/Logo';
 
-export default function LoginPage() {
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL?.replace(/\/$/, '') || '';
+
+export default function AdminLoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -17,13 +18,24 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const response = await fetch(`${BACKEND_URL}/api/auth/super-admin/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
       });
 
-      if (error) throw error;
-      navigate('/dashboard');
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.message || 'Acesso super admin negado');
+      }
+
+      const data = await response.json() as { accessToken: string; user: any; profile: any };
+      
+      // Store token in memory (or sessionStorage for persistence across page reload)
+      sessionStorage.setItem('authToken', data.accessToken);
+      sessionStorage.setItem('userProfile', JSON.stringify(data.profile));
+      
+      navigate('/admin/tenants');
     } catch (err: any) {
       setError(err.message || 'Erro ao fazer login');
     } finally {
@@ -40,11 +52,16 @@ export default function LoginPage() {
             <Logo className="h-10" />
           </div>
           
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 text-xs font-bold tracking-wide uppercase mb-4">
+            <ShieldCheck className="w-3.5 h-3.5" />
+            Acesso Restrito
+          </div>
+          
           <h2 className="text-3xl font-bold tracking-tight text-gray-900">
-            Bem-vindo de volta
+            Painel Super Admin
           </h2>
           <p className="mt-2 text-sm text-gray-500">
-            Faça login para acessar o painel da sua organização.
+            Gerenciamento global de tenants e assinaturas.
           </p>
 
           <div className="mt-10">
@@ -71,7 +88,7 @@ export default function LoginPage() {
                       autoComplete="email"
                       required
                       className="appearance-none block w-full pl-14 pr-4 py-4 border border-gray-200 rounded-full bg-gray-50/50 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent sm:text-sm transition-all shadow-sm hover:bg-gray-50"
-                      placeholder="Email ID"
+                      placeholder="E-mail de Administrador"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                     />
@@ -92,7 +109,7 @@ export default function LoginPage() {
                       autoComplete="current-password"
                       required
                       className="appearance-none block w-full pl-14 pr-4 py-4 border border-gray-200 rounded-full bg-gray-50/50 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent sm:text-sm transition-all shadow-sm hover:bg-gray-50"
-                      placeholder="Password"
+                      placeholder="Senha"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                     />
@@ -100,43 +117,35 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between px-2">
-                <div className="flex items-center">
-                  <input
-                    id="remember-me"
-                    name="remember-me"
-                    type="checkbox"
-                    className="h-4 w-4 text-brand focus:ring-brand border-gray-300 rounded cursor-pointer"
-                  />
-                  <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-500 cursor-pointer">
-                    Remember me
-                  </label>
-                </div>
-
-                <div className="text-sm">
-                  <a href="#" className="font-medium text-gray-500 hover:text-gray-700 transition-colors italic">
-                    Forgot Password?
-                  </a>
-                </div>
-              </div>
-
               <div className="pt-2">
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full flex justify-center items-center gap-2 py-4 px-4 border border-transparent rounded-full shadow-md shadow-brand/20 text-sm font-medium text-white bg-brand hover:bg-brand-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand disabled:opacity-70 disabled:cursor-not-allowed transition-all"
+                  className="w-full flex justify-center items-center gap-2 py-4 px-4 border border-transparent rounded-full shadow-md shadow-emerald-600/20 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-600 disabled:opacity-70 disabled:cursor-not-allowed transition-all"
                 >
                   {loading ? (
                     <>
                       <Loader2 className="h-5 w-5 animate-spin" />
-                      Signing In...
+                      Autenticando...
                     </>
                   ) : (
                     <>
-                      Sign In
+                      Acessar Painel
                     </>
                   )}
                 </button>
+              </div>
+              
+              <div className="flex items-center justify-between px-2 text-sm">
+                <a href="/forgot-password" className="font-medium text-emerald-600 hover:text-emerald-700 transition-colors">
+                  Esqueceu a senha?
+                </a>
+              </div>
+              
+              <div className="text-center mt-4">
+                <p className="text-xs text-gray-400">
+                  Dica: admin@evoplus.com / admin123
+                </p>
               </div>
             </form>
           </div>
@@ -151,20 +160,20 @@ export default function LoginPage() {
               <LogoIcon className="h-24 w-24" />
             </div>
             <h2 className="text-4xl font-bold text-gray-900 mb-6 tracking-tight">
-              Revolucione o atendimento
+              Controle Total da Plataforma
             </h2>
             <p className="text-lg text-gray-500 leading-relaxed max-w-lg mx-auto">
-              Gerencie múltiplos vendedores, analise conversas com IA em tempo real e aumente suas taxas de conversão.
+              Gerencie todas as empresas, acompanhe métricas globais e administre assinaturas em um único lugar.
             </p>
             
             <div className="mt-12 grid grid-cols-2 gap-6 text-left max-w-lg mx-auto">
               <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-                <div className="text-brand font-semibold mb-2">Análise de IA</div>
-                <div className="text-gray-500 text-sm">Insights automáticos sobre o desempenho de cada atendimento.</div>
+                <div className="text-emerald-600 font-semibold mb-2">Gestão de Tenants</div>
+                <div className="text-gray-500 text-sm">Controle de acesso, limites e configurações por empresa.</div>
               </div>
               <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-                <div className="text-brand font-semibold mb-2">Métricas em Tempo Real</div>
-                <div className="text-gray-500 text-sm">Acompanhe tempo de resposta, ociosidade e conversões.</div>
+                <div className="text-emerald-600 font-semibold mb-2">Métricas Globais</div>
+                <div className="text-gray-500 text-sm">Acompanhe MRR, usuários ativos e crescimento da plataforma.</div>
               </div>
             </div>
           </div>

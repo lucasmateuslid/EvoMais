@@ -7,6 +7,8 @@ import { useThemeStore } from './store/themeStore';
 import { AppLayout, PrivateRoute } from './components/layout/AppLayout';
 import { AdminLayout } from './components/layout/AdminLayout';
 import LoginPage from './pages/LoginPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import DashboardPage from './pages/DashboardPage';
 import VendorsPage from './pages/VendorsPage';
 import CRMPage from './pages/CRMPage';
@@ -44,6 +46,8 @@ export default function App() {
         <Routes>
           {/* Public Routes */}
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           
           {/* Admin Routes */}
           <Route path="/admin/login" element={<AdminLoginPage />} />

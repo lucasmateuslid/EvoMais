@@ -1,29 +1,30 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldCheck, Lock, Mail, Loader2 } from 'lucide-react';
-import { Logo, LogoIcon } from '../../components/ui/Logo';
+import { useAuthStore } from '../store/authStore';
+import { MessageSquare, ArrowRight, Loader2, ShieldCheck, Mail, Lock } from 'lucide-react';
+import { Logo, LogoIcon } from '../components/ui/Logo';
 
-export default function AdminLoginPage() {
+export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const login = useAuthStore((state) => state.login);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    // Mock admin login
-    setTimeout(() => {
-      if (email === 'admin@evoplus.com' && password === 'admin123') {
-        navigate('/admin/tenants');
-      } else {
-        setError('Credenciais de administrador inválidas.');
-      }
+    try {
+      await login(email, password);
+      navigate('/dashboard');
+    } catch (err: any) {
+      setError(err.message || 'Erro ao fazer login');
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
 
   return (
@@ -35,16 +36,11 @@ export default function AdminLoginPage() {
             <Logo className="h-10" />
           </div>
           
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 text-xs font-bold tracking-wide uppercase mb-4">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            Acesso Restrito
-          </div>
-          
           <h2 className="text-3xl font-bold tracking-tight text-gray-900">
-            Painel Super Admin
+            Bem-vindo de volta
           </h2>
           <p className="mt-2 text-sm text-gray-500">
-            Gerenciamento global de tenants e assinaturas.
+            Faça login para acessar o painel da sua organização.
           </p>
 
           <div className="mt-10">
@@ -71,7 +67,7 @@ export default function AdminLoginPage() {
                       autoComplete="email"
                       required
                       className="appearance-none block w-full pl-14 pr-4 py-4 border border-gray-200 rounded-full bg-gray-50/50 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent sm:text-sm transition-all shadow-sm hover:bg-gray-50"
-                      placeholder="E-mail de Administrador"
+                      placeholder="Email ID"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                     />
@@ -92,7 +88,7 @@ export default function AdminLoginPage() {
                       autoComplete="current-password"
                       required
                       className="appearance-none block w-full pl-14 pr-4 py-4 border border-gray-200 rounded-full bg-gray-50/50 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent sm:text-sm transition-all shadow-sm hover:bg-gray-50"
-                      placeholder="Senha"
+                      placeholder="Password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                     />
@@ -100,29 +96,43 @@ export default function AdminLoginPage() {
                 </div>
               </div>
 
+              <div className="flex items-center justify-between px-2">
+                <div className="flex items-center">
+                  <input
+                    id="remember-me"
+                    name="remember-me"
+                    type="checkbox"
+                    className="h-4 w-4 text-brand focus:ring-brand border-gray-300 rounded cursor-pointer"
+                  />
+                  <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-500 cursor-pointer">
+                    Remember me
+                  </label>
+                </div>
+
+                <div className="text-sm">
+                  <a href="/forgot-password" className="font-medium text-gray-500 hover:text-gray-700 transition-colors italic">
+                    Esqueceu a senha?
+                  </a>
+                </div>
+              </div>
+
               <div className="pt-2">
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full flex justify-center items-center gap-2 py-4 px-4 border border-transparent rounded-full shadow-md shadow-emerald-600/20 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-600 disabled:opacity-70 disabled:cursor-not-allowed transition-all"
+                  className="w-full flex justify-center items-center gap-2 py-4 px-4 border border-transparent rounded-full shadow-md shadow-brand/20 text-sm font-medium text-white bg-brand hover:bg-brand-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand disabled:opacity-70 disabled:cursor-not-allowed transition-all"
                 >
                   {loading ? (
                     <>
                       <Loader2 className="h-5 w-5 animate-spin" />
-                      Autenticando...
+                      Signing In...
                     </>
                   ) : (
                     <>
-                      Acessar Painel
+                      Sign In
                     </>
                   )}
                 </button>
-              </div>
-              
-              <div className="text-center mt-4">
-                <p className="text-xs text-gray-400">
-                  Dica: admin@evoplus.com / admin123
-                </p>
               </div>
             </form>
           </div>
@@ -137,20 +147,20 @@ export default function AdminLoginPage() {
               <LogoIcon className="h-24 w-24" />
             </div>
             <h2 className="text-4xl font-bold text-gray-900 mb-6 tracking-tight">
-              Controle Total da Plataforma
+              Revolucione o atendimento
             </h2>
             <p className="text-lg text-gray-500 leading-relaxed max-w-lg mx-auto">
-              Gerencie todas as empresas, acompanhe métricas globais e administre assinaturas em um único lugar.
+              Gerencie múltiplos vendedores, analise conversas com IA em tempo real e aumente suas taxas de conversão.
             </p>
             
             <div className="mt-12 grid grid-cols-2 gap-6 text-left max-w-lg mx-auto">
               <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-                <div className="text-emerald-600 font-semibold mb-2">Gestão de Tenants</div>
-                <div className="text-gray-500 text-sm">Controle de acesso, limites e configurações por empresa.</div>
+                <div className="text-brand font-semibold mb-2">Análise de IA</div>
+                <div className="text-gray-500 text-sm">Insights automáticos sobre o desempenho de cada atendimento.</div>
               </div>
               <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-                <div className="text-emerald-600 font-semibold mb-2">Métricas Globais</div>
-                <div className="text-gray-500 text-sm">Acompanhe MRR, usuários ativos e crescimento da plataforma.</div>
+                <div className="text-brand font-semibold mb-2">Métricas em Tempo Real</div>
+                <div className="text-gray-500 text-sm">Acompanhe tempo de resposta, ociosidade e conversões.</div>
               </div>
             </div>
           </div>

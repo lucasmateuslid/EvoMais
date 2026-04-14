@@ -10,14 +10,19 @@ import { logger } from './logger.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { aiRouter } from './routes/ai.js';
+import { authRouter } from './routes/auth.js';
+import { connectionsRouter } from './routes/connections.js';
 import { crmRouter } from './routes/crm.js';
 import { evolutionRouter } from './routes/evolution.js';
 import { healthRouter } from './routes/health.js';
+import { teamRouter } from './routes/team.js';
 import { webhookRouter } from './routes/webhook.js';
 import { initializeSentry } from './sentry.js';
 
 initializeSentry();
-startWorkers();
+// Redis desabilitado em desenvolvimento (sem REDIS_URL configurado)
+// Descomente quando tiver Redis rodando:
+// startWorkers();
 
 const app = express();
 
@@ -38,7 +43,10 @@ app.get('/', (_req, res) => {
 });
 
 app.use('/health', healthRouter);
+app.use('/api/auth', authRouter);
+app.use('/api/team', teamRouter);
 app.use('/api/ai', aiRouter);
+app.use('/api/connections', connectionsRouter);
 app.use('/api/crm', crmRouter);
 app.use('/api/evolution', evolutionRouter);
 app.use('/webhook', webhookRouter);

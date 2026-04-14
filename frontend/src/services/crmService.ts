@@ -1,15 +1,14 @@
-import { supabase } from '../lib/supabase';
 import { Deal, DealStage } from '../types/crm';
+import { useAuthStore } from '../store/authStore';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL?.replace(/\/$/, '') || '';
 
 if (!BACKEND_URL) {
-  throw new Error('VITE_BACKEND_URL não configurado. O frontend exige backend para operações de CRM.');
+  throw new Error('VITE_BACKEND_URL não configurado.');
 }
 
 async function getAccessToken() {
-  const { data } = await supabase.auth.getSession();
-  return data.session?.access_token ?? null;
+  return useAuthStore.getState().accessToken;
 }
 
 async function backendFetch(path: string, init?: RequestInit) {

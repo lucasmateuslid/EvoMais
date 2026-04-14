@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { requireAuth } from '../middleware/auth.js';
 import { createEvolutionInstance, sendEvolutionMessage } from '../services/evolutionService.js';
 const createInstanceSchema = z.object({
     instanceName: z.string().min(1),
@@ -10,6 +11,7 @@ const sendMessageSchema = z.object({
     text: z.string().min(1),
 });
 export const evolutionRouter = Router();
+evolutionRouter.use(requireAuth);
 evolutionRouter.post('/instances', async (req, res, next) => {
     try {
         const payload = createInstanceSchema.parse(req.body);

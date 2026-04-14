@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 
+import { requireAuth } from '../middleware/auth.js';
 import { generateChatResponse } from '../services/aiService.js';
 import type { ChatRequest } from '../types/ai.js';
 
@@ -32,6 +33,8 @@ const chatRequestSchema = z.object({
 });
 
 export const aiRouter = Router();
+
+aiRouter.use(requireAuth);
 
 aiRouter.post('/chat', async (req, res, next) => {
   try {

@@ -1,16 +1,15 @@
 // Evolution API v2 Wrapper
 
-import { supabase } from './supabase';
+import { useAuthStore } from '../store/authStore';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL?.replace(/\/$/, '') || '';
 
 if (!BACKEND_URL) {
-  throw new Error('VITE_BACKEND_URL não configurado. O frontend exige backend para Evolution API.');
+  throw new Error('VITE_BACKEND_URL não configurado.');
 }
 
 async function getAccessToken() {
-  const { data } = await supabase.auth.getSession();
-  return data.session?.access_token ?? null;
+  return useAuthStore.getState().accessToken;
 }
 
 export const evolutionApi = {
