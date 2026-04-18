@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-import { supabase } from '../lib/supabase';
 import { disconnectRealtimeSocket } from '../services/realtimeService';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL?.replace(/\/$/, '') || '';
@@ -25,26 +24,9 @@ interface AuthState {
   initialize: () => Promise<void>;
 }
 
-let authUnsubscribe: (() => void) | null = null;
-
-async function fetchUserProfile(accessToken: string) {
-  const response = await fetch(`${BACKEND_URL}/api/auth/me`, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
-
-  if (!response.ok) {
-    return null;
-  }
-
-  const data = await response.json() as { profile?: any | null };
-  return data.profile || null;
-}
-
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set, _get) => ({
+    (set, get) => ({
       accessToken: null,
       user: null,
       organizationId: null,
@@ -68,15 +50,9 @@ export const useAuthStore = create<AuthState>()(
 
         const data = await response.json() as {
           accessToken: string;
-          refreshToken: string;
           user: any;
           profile: any | null;
         };
-
-        await supabase.auth.setSession({
-          access_token: data.accessToken,
-          refresh_token: data.refreshToken,
-        });
 
         set({
           accessToken: data.accessToken,
@@ -88,54 +64,38 @@ export const useAuthStore = create<AuthState>()(
       },
       signOut: async () => {
         await fetch(`${BACKEND_URL}/api/auth/logout`, { method: 'POST' });
-        await supabase.auth.signOut().catch(() => undefined);
         disconnectRealtimeSocket();
         set({ accessToken: null, user: null, organizationId: null, profile: null });
       },
       initialize: async () => {
-        if (!authUnsubscribe) {
-          const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-            if (!session?.access_token) {
-              set({ accessToken: null, user: null, organizationId: null, profile: null, isLoading: false });
-              return;
-            }
+        const token = get().accessToken;
 
-            void fetchUserProfile(session.access_token)
-              .then(profile => {
-                set({
-                  accessToken: session.access_token,
-                  user: session.user,
-                  profile,
-                  organizationId: profile?.organization_id ?? null,
-                  isLoading: false,
-                });
-              })
-              .catch(() => {
-                set({
-                  accessToken: session.access_token,
-                  user: session.user,
-                  isLoading: false,
-                });
-              });
-          });
-
-          authUnsubscribe = () => {
-            data.subscription.unsubscribe();
-          };
-        }
-
-        const { data: sessionData } = await supabase.auth.getSession();
-        const session = sessionData.session;
-
-        if (!session?.access_token) {
+        if (!token) {
           set({ accessToken: null, user: null, organizationId: null, profile: null, isLoading: false });
           return;
         }
 
-        const profile = await fetchUserProfile(session.access_token);
+        const response = await fetch(`${BACKEND_URL}/api/auth/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          set({ accessToken: null, user: null, organizationId: null, profile: null, isLoading: false });
+          return;
+        }
+
+        const payload = await response.json() as {
+          user: any;
+          profile: any | null;
+        };
+
+        const profile = payload.profile || null;
+
         set({
-          accessToken: session.access_token,
-          user: session.user,
+          accessToken: token,
+          user: payload.user,
           profile,
           organizationId: profile?.organization_id ?? null,
           isLoading: false,
@@ -145,6 +105,8 @@ export const useAuthStore = create<AuthState>()(
     {
       name: 'evomais-auth-store',
       partialize: state => ({
+        accessToken: state.accessToken,
+        user: state.user,
         organizationId: state.organizationId,
         profile: state.profile,
       }),

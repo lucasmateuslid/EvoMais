@@ -190,7 +190,7 @@ export default router;
 #### Passo 3.3: Integração com Evolution API
 ```typescript
 // backend/src/routes/evolution.ts
-router.post('/webhook/messages', async (req, res) => {
+router.post('/webhook/evolution', async (req, res) => {
   const { data } = req.body;
 
   // 1. Encontrar conversa

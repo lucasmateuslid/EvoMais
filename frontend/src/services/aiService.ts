@@ -1,5 +1,6 @@
 import { AIContext, ChatMessage } from "../types/ai";
 import { useAuthStore } from '../store/authStore';
+import { HISTORY_MAX_ITEMS, HISTORY_TEXT_MAX_CHARS } from '../constants/ai';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL?.replace(/\/$/, '') || '';
 
@@ -9,6 +10,14 @@ if (!BACKEND_URL) {
 
 async function getAccessToken() {
   return useAuthStore.getState().accessToken;
+}
+
+function sanitizeHistory(history: ChatMessage[]): ChatMessage[] {
+  return history.slice(-HISTORY_MAX_ITEMS).map((message) => ({
+    ...message,
+    text: message.text.trim().slice(0, HISTORY_TEXT_MAX_CHARS),
+    created_at: String(message.created_at).slice(0, 64),
+  }));
 }
 
 export const aiService = {
@@ -27,7 +36,7 @@ export const aiService = {
       },
       body: JSON.stringify({
         message,
-        history,
+        history: sanitizeHistory(history),
         context,
       }),
     });

@@ -1,20 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Lock, Loader2, CheckCircle, Eye, EyeOff } from 'lucide-react';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { Logo } from '../components/ui/Logo';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL?.replace(/\/$/, '') || '';
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-
-const supabaseClient: SupabaseClient | null = SUPABASE_URL && SUPABASE_ANON_KEY
-  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    })
-  : null;
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL?.replace(/\/$/, '') || '';
 
 export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
@@ -104,46 +93,25 @@ export default function ResetPasswordPage() {
     setLoading(true);
 
     try {
-      if (!supabaseClient) {
-        throw new Error('Supabase não configurado no frontend.');
-      }
-
-      if (code) {
-        const { error: exchangeError } = await supabaseClient.auth.exchangeCodeForSession(code);
-
-        if (exchangeError) {
-          throw exchangeError;
-        }
-      }
-
-      if (tokenHash) {
-        const { error: verifyError } = await supabaseClient.auth.verifyOtp({
-          token_hash: tokenHash,
-          type: (otpType as any) || 'recovery',
-        });
-
-        if (verifyError) {
-          throw verifyError;
-        }
-      }
-
-      if (accessToken && refreshToken) {
-        const { error: sessionError } = await supabaseClient.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        });
-
-        if (sessionError) {
-          throw sessionError;
-        }
-      }
-
-      const { error: updateError } = await supabaseClient.auth.updateUser({
-        password,
+      const response = await fetch(`${BACKEND_URL}/api/auth/reset-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token: accessToken,
+          accessToken,
+          refreshToken,
+          code,
+          tokenHash,
+          otpType,
+          password,
+        }),
       });
 
-      if (updateError) {
-        throw updateError;
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.message || 'Erro ao redefinir senha');
       }
 
       setSuccess(true);
@@ -250,7 +218,7 @@ export default function ResetPasswordPage() {
 
                   <button
                     type="submit"
-                    disabled={loading || (!accessToken && !code && !tokenHash)}
+                    disabled={loading || ((!accessToken || !refreshToken) && !code && !tokenHash)}
                     className="w-full flex items-center justify-center py-3 px-4 border border-transparent rounded-full shadow-sm text-sm font-semibold text-white bg-brand hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {loading ? (

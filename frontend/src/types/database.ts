@@ -96,6 +96,50 @@ export interface Database {
           created_at?: string
         }
       }
+      conversations: {
+        Row: {
+          id: string
+          organization_id: string
+          seller_id: string
+          contact_phone: string
+          contact_name: string | null
+          status: string
+          started_at: string
+          last_message_at: string | null
+          channel: string
+          tags: string[]
+          closed_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          organization_id: string
+          seller_id: string
+          contact_phone: string
+          contact_name?: string | null
+          status?: string
+          started_at?: string
+          last_message_at?: string | null
+          channel?: string
+          tags?: string[]
+          closed_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          organization_id?: string
+          seller_id?: string
+          contact_phone?: string
+          contact_name?: string | null
+          status?: string
+          started_at?: string
+          last_message_at?: string | null
+          channel?: string
+          tags?: string[]
+          closed_at?: string | null
+          updated_at?: string
+        }
+      }
       deals: {
         Row: {
           id: string

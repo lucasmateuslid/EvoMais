@@ -3,31 +3,57 @@ import { logger } from '../logger.js';
 import { evolutionCircuitBreaker } from '../utils/circuitBreaker.js';
 import type { EvolutionInstanceRequest, EvolutionMessageRequest, EvolutionOperationResponse } from '../types/evolution.js';
 
-async function proxyEvolutionRequest(path: string, body: object) {
-  const response = await fetch(`${config.EVOLUTION_API_URL}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(config.EVOLUTION_GLOBAL_API_KEY ? { apikey: config.EVOLUTION_GLOBAL_API_KEY } : {}),
-    },
-    body: JSON.stringify(body),
-  });
+async function proxyEvolutionRequest(path: string, options?: { method?: 'GET' | 'POST'; body?: object }) {
+  const method = options?.method ?? 'POST';
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), config.EVOLUTION_REQUEST_TIMEOUT_MS);
 
-  const payload = await response.json().catch(() => ({}));
+  try {
+    const response = await fetch(`${config.EVOLUTION_API_URL}${path}`, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(config.EVOLUTION_GLOBAL_API_KEY ? { apikey: config.EVOLUTION_GLOBAL_API_KEY } : {}),
+      },
+      signal: controller.signal,
+      ...(method === 'POST' ? { body: JSON.stringify(options?.body || {}) } : {}),
+    });
 
-  if (!response.ok) {
-    throw new Error(`Evolution request failed: ${response.status}`);
+    const payload = await response
+      .json()
+      .catch(async () => ({ raw: await response.text().catch(() => '') }));
+
+    if (!response.ok) {
+      const errorMessage = typeof payload === 'object' && payload !== null
+        ? JSON.stringify(payload)
+        : String(payload);
+      throw new Error(`Evolution request failed: ${response.status} ${errorMessage}`);
+    }
+
+    return payload;
+  } finally {
+    clearTimeout(timeoutId);
   }
+}
 
-  return payload;
+async function tryEvolutionRequest(path: string, options?: { method?: 'GET' | 'POST'; body?: object }) {
+  try {
+    return await proxyEvolutionRequest(path, options);
+  } catch (error) {
+    logger.debug({ error, path, method: options?.method ?? 'POST' }, 'Evolution request attempt failed');
+    return null;
+  }
 }
 
 export async function createEvolutionInstance(request: EvolutionInstanceRequest): Promise<EvolutionOperationResponse> {
   try {
     const payload = await proxyEvolutionRequest('/instance/create', {
-      instanceName: request.instanceName,
-      qrcode: true,
-      integration: 'WHATSAPP-BAILEYS',
+      method: 'POST',
+      body: {
+        instanceName: request.instanceName,
+        qrcode: true,
+        integration: 'WHATSAPP-BAILEYS',
+      },
     });
 
     evolutionCircuitBreaker.recordSuccess();
@@ -39,11 +65,65 @@ export async function createEvolutionInstance(request: EvolutionInstanceRequest)
     };
   } catch (error) {
     evolutionCircuitBreaker.recordFailure();
-    logger.warn({ error, instanceName: request.instanceName }, 'Evolution instance creation failed');
+    logger.warn(
+      {
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+        instanceName: request.instanceName,
+      },
+      'Evolution instance creation failed',
+    );
 
     return {
       status: 'queued',
       message: 'Evolution API unavailable. Instance creation queued for retry.',
+    };
+  }
+}
+
+export async function reconnectEvolutionInstance(instanceName: string): Promise<EvolutionOperationResponse> {
+  if (!evolutionCircuitBreaker.canProceed()) {
+    return {
+      status: 'queued',
+      message: 'Circuit breaker open for Evolution API. Reconnect queued for later retry.',
+    };
+  }
+
+  try {
+    const attempts = await Promise.all([
+      tryEvolutionRequest(`/instance/connect/${instanceName}`, { method: 'POST', body: {} }),
+      tryEvolutionRequest(`/instance/connect/${instanceName}`, { method: 'GET' }),
+      tryEvolutionRequest(`/instance/qrcode/${instanceName}`, { method: 'GET' }),
+      tryEvolutionRequest(`/instance/qrcode/${instanceName}`, { method: 'POST', body: {} }),
+    ]);
+
+    const payload = attempts.find(Boolean);
+
+    if (!payload) {
+      throw new Error('No valid reconnect/qrcode response from Evolution API');
+    }
+
+    evolutionCircuitBreaker.recordSuccess();
+
+    return {
+      status: 'sent',
+      message: 'Reconnect request sent to Evolution API.',
+      payload,
+    };
+  } catch (error) {
+    evolutionCircuitBreaker.recordFailure();
+    logger.warn(
+      {
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+        instanceName,
+      },
+      'Evolution reconnect failed',
+    );
+
+    return {
+      status: 'failed',
+      message: 'Evolution API unavailable during reconnect.',
     };
   }
 }
@@ -58,13 +138,16 @@ export async function sendEvolutionMessage(request: EvolutionMessageRequest): Pr
 
   try {
     const payload = await proxyEvolutionRequest(`/message/sendText/${request.instanceName}`, {
-      number: request.number,
-      options: {
-        delay: 1200,
-        presence: 'composing',
-      },
-      textMessage: {
-        text: request.text,
+      method: 'POST',
+      body: {
+        number: request.number,
+        options: {
+          delay: 1200,
+          presence: 'composing',
+        },
+        textMessage: {
+          text: request.text,
+        },
       },
     });
 
@@ -77,7 +160,14 @@ export async function sendEvolutionMessage(request: EvolutionMessageRequest): Pr
     };
   } catch (error) {
     evolutionCircuitBreaker.recordFailure();
-    logger.warn({ error, instanceName: request.instanceName }, 'Evolution message send failed');
+    logger.warn(
+      {
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+        instanceName: request.instanceName,
+      },
+      'Evolution message send failed',
+    );
 
     return {
       status: 'queued',

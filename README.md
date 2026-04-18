@@ -70,7 +70,8 @@ O EvoMais integra:
 
 - `PORT` (default 4000)
 - `NODE_ENV`
-- `CORS_ORIGIN`
+- `CORS_ORIGIN` (ex.: `http://localhost:5173`)
+- `FRONTEND_URL` (ex.: `http://localhost:5173`)
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
@@ -78,6 +79,7 @@ O EvoMais integra:
 - `GEMINI_API_KEY`, `ANTHROPIC_API_KEY` ou `GROQ_API_KEY`
 - `EVOLUTION_API_URL`
 - `EVOLUTION_GLOBAL_API_KEY`
+- `WEBHOOK_SECRET` (assinar e validar `x-webhook-signature`)
 - `SENTRY_DSN`
 
 Use os arquivos `.env.example` como base e nunca versione chaves reais.

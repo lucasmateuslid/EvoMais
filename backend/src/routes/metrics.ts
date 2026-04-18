@@ -8,12 +8,57 @@ function startOfDay(date: Date) {
   return copy;
 }
 
+function endOfDay(date: Date) {
+  const copy = new Date(date);
+  copy.setHours(23, 59, 59, 999);
+  return copy;
+}
+
 function formatWeekday(date: Date) {
   return date.toLocaleDateString('pt-BR', { weekday: 'short' });
 }
 
+function formatShortDate(date: Date) {
+  return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+}
+
 function formatHour(hour: number) {
   return `${String(hour).padStart(2, '0')}:00`;
+}
+
+function safeParseDate(value?: string) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function buildDateBuckets(start: Date, end: Date) {
+  const buckets: Array<{ date: Date; next: Date; label: string; key: string }> = [];
+  const cursor = startOfDay(start);
+  const endDate = endOfDay(end);
+
+  while (cursor <= endDate) {
+    const next = new Date(cursor);
+    next.setDate(cursor.getDate() + 1);
+    buckets.push({
+      date: new Date(cursor),
+      next,
+      label: formatShortDate(cursor),
+      key: cursor.toISOString().slice(0, 10),
+    });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return buckets;
+}
+
+function rollingAverage(values: number[], windowSize = 3) {
+  return values.map((_, index) => {
+    const start = Math.max(0, index - windowSize + 1);
+    const window = values.slice(start, index + 1).filter(value => value > 0);
+    if (window.length === 0) return 0;
+    return Number((window.reduce((sum, value) => sum + value, 0) / window.length).toFixed(1));
+  });
 }
 
 export const metricsRouter = Router();
@@ -28,6 +73,45 @@ metricsRouter.get('/dashboard', async (req, res, next) => {
       return res.status(401).json({ error: 'unauthorized' });
     }
 
+    const now = new Date();
+    const startParam = typeof req.query.start === 'string' ? req.query.start : undefined;
+    const endParam = typeof req.query.end === 'string' ? req.query.end : undefined;
+    const sellerParam = typeof req.query.sellerIds === 'string' ? req.query.sellerIds : undefined;
+
+    const parsedStart = safeParseDate(startParam);
+    const parsedEnd = safeParseDate(endParam);
+
+    let rangeStart = parsedStart
+      ? startOfDay(parsedStart)
+      : startOfDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6));
+    let rangeEnd = parsedEnd ? endOfDay(parsedEnd) : endOfDay(now);
+
+    if (rangeStart > rangeEnd) {
+      const temp = rangeStart;
+      rangeStart = rangeEnd;
+      rangeEnd = temp;
+    }
+
+    const sellerIds = sellerParam
+      ? sellerParam.split(',').map(value => value.trim()).filter(Boolean)
+      : [];
+
+    let conversationsQuery = supabase
+      .from('conversations')
+      .select('id, seller_id, status, started_at, last_message_at, closed_at, channel, tags')
+      .eq('organization_id', request.organizationId)
+      .lte('started_at', rangeEnd.toISOString());
+
+    let messagesQuery = supabase
+      .from('messages')
+      .select('id, seller_id, conversation_id, sender_type, created_at')
+      .eq('organization_id', request.organizationId);
+
+    if (sellerIds.length > 0) {
+      conversationsQuery = conversationsQuery.in('seller_id', sellerIds);
+      messagesQuery = messagesQuery.in('seller_id', sellerIds);
+    }
+
     const [dealsResult, sellersResult, conversationsResult, messagesResult] = await Promise.all([
       supabase
         .from('deals')
@@ -37,14 +121,8 @@ metricsRouter.get('/dashboard', async (req, res, next) => {
         .from('sellers')
         .select('id, name, status')
         .eq('organization_id', request.organizationId),
-      supabase
-        .from('conversations')
-        .select('id, seller_id, status, started_at, last_message_at')
-        .eq('organization_id', request.organizationId),
-      supabase
-        .from('messages')
-        .select('id, seller_id, created_at')
-        .eq('organization_id', request.organizationId),
+      conversationsQuery,
+      messagesQuery,
     ]);
 
     if (dealsResult.error) return next(dealsResult.error);
@@ -57,7 +135,6 @@ metricsRouter.get('/dashboard', async (req, res, next) => {
     const conversations = conversationsResult.data || [];
     const messages = messagesResult.data || [];
 
-    const now = new Date();
     const thirtyDaysAgo = new Date(now);
     thirtyDaysAgo.setDate(now.getDate() - 30);
 
@@ -147,6 +224,229 @@ metricsRouter.get('/dashboard', async (req, res, next) => {
       };
     });
 
+    const pendingStatuses = new Set(['open', 'in_progress']);
+    const resolvedStatuses = new Set(['resolved', 'closed']);
+    const normalizeStatus = (value?: string | null) => (value || '').toLowerCase();
+
+    const normalizedConversations = conversations.map(conversation => {
+      const startedAt = new Date(conversation.started_at);
+      const lastMessageAt = conversation.last_message_at ? new Date(conversation.last_message_at) : null;
+      const explicitClosedAt = conversation.closed_at ? new Date(conversation.closed_at) : null;
+      const status = normalizeStatus(conversation.status);
+      const fallbackClosedAt = !explicitClosedAt && resolvedStatuses.has(status) && lastMessageAt ? lastMessageAt : null;
+
+      return {
+        ...conversation,
+        status,
+        startedAt,
+        lastMessageAt,
+        closedAt: explicitClosedAt || fallbackClosedAt,
+        channel: conversation.channel || 'whatsapp',
+        tags: Array.isArray(conversation.tags) ? conversation.tags.filter(Boolean) : [],
+      };
+    });
+
+    const buckets = buildDateBuckets(rangeStart, rangeEnd);
+    const conversationsInRange = normalizedConversations.filter(conversation =>
+      conversation.startedAt >= rangeStart && conversation.startedAt <= rangeEnd,
+    );
+
+    const pendingBefore = normalizedConversations.filter(conversation =>
+      pendingStatuses.has(conversation.status) && conversation.startedAt < rangeStart,
+    ).length;
+
+    const pendingAfter = normalizedConversations.filter(conversation =>
+      pendingStatuses.has(conversation.status) && conversation.startedAt <= rangeEnd,
+    ).length;
+
+    const newInPeriod = conversationsInRange.length;
+    const resolvedInPeriod = normalizedConversations.filter(conversation => {
+      if (!resolvedStatuses.has(conversation.status) || !conversation.closedAt) {
+        return false;
+      }
+      return conversation.closedAt >= rangeStart && conversation.closedAt <= rangeEnd;
+    }).length;
+
+    const capacity = buckets.map(bucket => {
+      const newCount = normalizedConversations.filter(conversation =>
+        conversation.startedAt >= bucket.date && conversation.startedAt < bucket.next,
+      ).length;
+
+      const resolvedCount = normalizedConversations.filter(conversation =>
+        conversation.closedAt && conversation.closedAt >= bucket.date && conversation.closedAt < bucket.next,
+      ).length;
+
+      const pendingCount = normalizedConversations.filter(conversation =>
+        conversation.startedAt < bucket.next && (!conversation.closedAt || conversation.closedAt >= bucket.next),
+      ).length;
+
+      return {
+        date: bucket.key,
+        label: bucket.label,
+        newCount,
+        resolvedCount,
+        pendingCount,
+      };
+    });
+
+    const conversationIdsInRange = new Set(conversationsInRange.map(conversation => conversation.id));
+    const messagesByConversation = new Map<string, Array<{ sender_type: string; created_at: string }>>();
+
+    messages.forEach(message => {
+      if (!message.conversation_id || !conversationIdsInRange.has(message.conversation_id)) {
+        return;
+      }
+
+      const bucket = messagesByConversation.get(message.conversation_id) || [];
+      bucket.push({ sender_type: message.sender_type, created_at: message.created_at });
+      messagesByConversation.set(message.conversation_id, bucket);
+    });
+
+    const waitTimeByDay = new Map<string, number[]>();
+    const waitTimesAll: number[] = [];
+
+    conversationsInRange.forEach(conversation => {
+      const conversationMessages = messagesByConversation.get(conversation.id) || [];
+      let firstContact: Date | null = null;
+      let firstSeller: Date | null = null;
+
+      conversationMessages.forEach(message => {
+        const createdAt = new Date(message.created_at);
+        if (message.sender_type === 'contact') {
+          if (!firstContact || createdAt < firstContact) {
+            firstContact = createdAt;
+          }
+        }
+
+        if (message.sender_type === 'seller') {
+          if (!firstSeller || createdAt < firstSeller) {
+            firstSeller = createdAt;
+          }
+        }
+      });
+
+      if (!firstContact || !firstSeller || firstSeller < firstContact) {
+        return;
+      }
+
+      const waitMinutes = Number(((firstSeller.getTime() - firstContact.getTime()) / 60000).toFixed(1));
+      waitTimesAll.push(waitMinutes);
+
+      const dayKey = conversation.startedAt.toISOString().slice(0, 10);
+      const dayBucket = waitTimeByDay.get(dayKey) || [];
+      dayBucket.push(waitMinutes);
+      waitTimeByDay.set(dayKey, dayBucket);
+    });
+
+    const waitDailyBase = buckets.map(bucket => {
+      const values = waitTimeByDay.get(bucket.key) || [];
+      const averageMinutes = values.length > 0
+        ? Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(1))
+        : 0;
+
+      return {
+        date: bucket.key,
+        label: bucket.label,
+        averageMinutes,
+      };
+    });
+
+    const waitTrends = rollingAverage(waitDailyBase.map(item => item.averageMinutes));
+    const waitDaily = waitDailyBase.map((item, index) => ({
+      ...item,
+      trendMinutes: waitTrends[index] || 0,
+    }));
+
+    const waitAverage = waitTimesAll.length > 0
+      ? Number((waitTimesAll.reduce((sum, value) => sum + value, 0) / waitTimesAll.length).toFixed(1))
+      : 0;
+
+    const durationByDay = new Map<string, number[]>();
+    const durationsAll: number[] = [];
+
+    normalizedConversations.forEach(conversation => {
+      if (!conversation.closedAt) {
+        return;
+      }
+
+      if (conversation.closedAt < rangeStart || conversation.closedAt > rangeEnd) {
+        return;
+      }
+
+      const durationMinutes = Number(((conversation.closedAt.getTime() - conversation.startedAt.getTime()) / 60000).toFixed(1));
+      if (durationMinutes < 0) {
+        return;
+      }
+
+      durationsAll.push(durationMinutes);
+
+      const dayKey = conversation.closedAt.toISOString().slice(0, 10);
+      const dayBucket = durationByDay.get(dayKey) || [];
+      dayBucket.push(durationMinutes);
+      durationByDay.set(dayKey, dayBucket);
+    });
+
+    const durationDailyBase = buckets.map(bucket => {
+      const values = durationByDay.get(bucket.key) || [];
+      const averageMinutes = values.length > 0
+        ? Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(1))
+        : 0;
+
+      return {
+        date: bucket.key,
+        label: bucket.label,
+        averageMinutes,
+      };
+    });
+
+    const durationTrends = rollingAverage(durationDailyBase.map(item => item.averageMinutes));
+    const durationDaily = durationDailyBase.map((item, index) => ({
+      ...item,
+      trendMinutes: durationTrends[index] || 0,
+    }));
+
+    const durationAverage = durationsAll.length > 0
+      ? Number((durationsAll.reduce((sum, value) => sum + value, 0) / durationsAll.length).toFixed(1))
+      : 0;
+
+    const channelCounts = new Map<string, number>();
+    const tagCounts = new Map<string, number>();
+
+    conversationsInRange.forEach(conversation => {
+      const channel = conversation.channel || 'whatsapp';
+      channelCounts.set(channel, (channelCounts.get(channel) || 0) + 1);
+
+      conversation.tags.forEach(tag => {
+        const normalizedTag = String(tag).trim();
+        if (!normalizedTag) {
+          return;
+        }
+        tagCounts.set(normalizedTag, (tagCounts.get(normalizedTag) || 0) + 1);
+      });
+    });
+
+    const channels = [...channelCounts.entries()]
+      .map(([channel, count]) => ({ channel, count }))
+      .sort((a, b) => b.count - a.count);
+
+    const tags = [...tagCounts.entries()]
+      .map(([tag, count]) => ({ tag, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 50);
+
+    const hourlyVolume = Array.from({ length: 24 }).map((_, hour) => ({
+      hour: formatHour(hour),
+      count: 0,
+    }));
+
+    conversationsInRange.forEach(conversation => {
+      const hour = conversation.startedAt.getHours();
+      hourlyVolume[hour].count += 1;
+    });
+
+    const peakHour = hourlyVolume.reduce((max, entry) => (entry.count > max.count ? entry : max), hourlyVolume[0] || { hour: '-', count: 0 });
+    const peakHourLabel = peakHour.count > 0 ? peakHour.hour : '-';
+
     res.json({
       summary: {
         monthlyRevenue,
@@ -167,6 +467,37 @@ metricsRouter.get('/dashboard', async (req, res, next) => {
       topVendors,
       generatedAt: now.toISOString(),
       sellerDirectory: Object.fromEntries(sellerMap),
+      attendance: {
+        range: {
+          start: rangeStart.toISOString(),
+          end: rangeEnd.toISOString(),
+        },
+        filters: {
+          sellerIds,
+        },
+        kpis: {
+          pendingBefore,
+          newInPeriod,
+          resolvedInPeriod,
+          pendingAfter,
+        },
+        capacity,
+        waitTime: {
+          averageMinutes: waitAverage,
+          daily: waitDaily,
+          totalConversations: conversationsInRange.length,
+          respondedConversations: waitTimesAll.length,
+        },
+        duration: {
+          averageMinutes: durationAverage,
+          daily: durationDaily,
+          concludedConversations: durationsAll.length,
+        },
+        channels,
+        tags,
+        hourlyVolume,
+        peakHour: peakHourLabel,
+      },
     });
   } catch (error) {
     next(error);

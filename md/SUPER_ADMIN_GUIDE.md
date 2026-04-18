@@ -110,7 +110,7 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
 
 ### Teste 2: Criar um Novo Usuário (Super Admin)
 ```bash
-POST /api/team/members
+POST /api/team/members/invite
 Authorization: Bearer YOUR_TOKEN
 Content-Type: application/json
 
@@ -130,7 +130,7 @@ Content-Type: application/json
 VITE_BACKEND_URL=http://localhost:4000
 PORT=4000
 NODE_ENV=development
-CORS_ORIGIN=http://localhost:3000
+CORS_ORIGIN=http://localhost:5173
 
 SUPABASE_URL=https://nxbmvyzvkpkbhonleqeo.supabase.co
 SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
@@ -170,7 +170,7 @@ VITE_BACKEND_URL=http://localhost:4000
 ```
 ┌─────────────────────┐
 │   Frontend React    │
-│   localhost:3000    │
+│   localhost:5173    │
 └──────────┬──────────┘
            │
            │ POST /api/auth/super-admin/login
@@ -215,7 +215,7 @@ VITE_BACKEND_URL=http://localhost:4000
 | `/api/auth/me` | GET | Verificar autenticação |
 | `/api/auth/logout` | POST | Fazer logout |
 | `/api/team/members` | GET | Listar usuários (super admin) |
-| `/api/team/members` | POST | Criar usuário (super admin) |
+| `/api/team/members/invite` | POST | Convidar usuário (super admin) |
 | `/api/crm/deals` | GET | Listar deals (usuário org) |
 
 ---
@@ -224,7 +224,7 @@ VITE_BACKEND_URL=http://localhost:4000
 
 - [ ] Testar login super admin
 - [ ] Testar login normal
-- [ ] Criar novo usuário via `/api/team/members`
+- [ ] Criar novo usuário via `/api/team/members/invite`
 - [ ] Verificar isolamento de dados (RLS)
 - [ ] Configurar MFA no Supabase
 - [ ] Implementar refresh token (JWT)

@@ -3,18 +3,18 @@ import { Deal, InfoType, FollowupStatus } from '../../types/crm';
 import { Draggable } from '@hello-pangea/dnd';
 
 const FOLLOWUP_BADGE: Record<FollowupStatus, { bg: string; color: string }> = {
-  vencido:  { bg: "bg-red-100 dark:bg-red-500/10",    color: "text-red-700 dark:text-red-400"  },
-  hoje:     { bg: "bg-amber-100 dark:bg-amber-500/10",   color: "text-amber-700 dark:text-amber-400"  },
-  amanhã:   { bg: "bg-emerald-100 dark:bg-emerald-500/10",   color: "text-emerald-700 dark:text-emerald-400"  },
-  ok:       { bg: "bg-emerald-100 dark:bg-emerald-500/10",   color: "text-emerald-700 dark:text-emerald-400"  },
-  reunião:  { bg: "bg-blue-100 dark:bg-blue-500/10",   color: "text-blue-700 dark:text-blue-400"  },
-  contrato: { bg: "bg-emerald-100 dark:bg-emerald-500/10",   color: "text-emerald-700 dark:text-emerald-400"  },
+  vencido:  { bg: "bg-red-100 dark:bg-red-500/20",    color: "text-red-700 dark:text-red-300"  },
+  hoje:     { bg: "bg-amber-100 dark:bg-amber-500/20",   color: "text-amber-700 dark:text-amber-300"  },
+  amanhã:   { bg: "bg-emerald-100 dark:bg-emerald-500/20",   color: "text-emerald-700 dark:text-emerald-300"  },
+  ok:       { bg: "bg-emerald-100 dark:bg-emerald-500/20",   color: "text-emerald-700 dark:text-emerald-300"  },
+  reunião:  { bg: "bg-blue-100 dark:bg-blue-500/20",   color: "text-blue-700 dark:text-blue-300"  },
+  contrato: { bg: "bg-emerald-100 dark:bg-emerald-500/20",   color: "text-emerald-700 dark:text-emerald-300"  },
 };
 
 const INFO_TIPO: Record<InfoType, { bg: string; color: string }> = {
-  danger:  { bg: "bg-red-50 dark:bg-red-500/5",   color: "text-red-600 dark:text-red-400" },
-  success: { bg: "bg-emerald-50 dark:bg-emerald-500/5",  color: "text-emerald-600 dark:text-emerald-400" },
-  info:    { bg: "bg-blue-50 dark:bg-blue-500/5",  color: "text-blue-600 dark:text-blue-400" },
+  danger:  { bg: "bg-red-50 dark:bg-red-500/10",   color: "text-red-700 dark:text-red-300" },
+  success: { bg: "bg-emerald-50 dark:bg-emerald-500/10",  color: "text-emerald-700 dark:text-emerald-300" },
+  info:    { bg: "bg-blue-50 dark:bg-blue-500/10",  color: "text-blue-700 dark:text-blue-300" },
 };
 
 const formatarValor = (v: number) =>
@@ -51,7 +51,7 @@ export function DealCard({ deal, index }: DealCardProps) {
               {deal.company}
             </p>
             <span 
-              className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${badge.bg} ${badge.color}`}
+              className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${badge.bg} ${badge.color}`}
             >
               {deal.followup_status}
             </span>
@@ -65,7 +65,7 @@ export function DealCard({ deal, index }: DealCardProps) {
           {/* Checklist progress */}
           {ck && (
             <div className="mb-2">
-              <div className="flex justify-between text-[10px] text-muted mb-1 font-medium">
+              <div className="flex justify-between text-[11px] text-secondary mb-1 font-medium">
                 <span>Checklist</span>
                 <span>{ck.feitos}/{ck.total}</span>
               </div>
@@ -81,13 +81,13 @@ export function DealCard({ deal, index }: DealCardProps) {
           {/* Info extra */}
           {info && (
             <div className={`rounded-md p-1.5 px-2 mb-2 ${info.bg}`}>
-              <p className={`text-[10px] font-medium ${info.color}`}>{deal.info}</p>
+              <p className={`text-[11px] font-semibold ${info.color}`}>{deal.info}</p>
             </div>
           )}
 
           {/* Rodapé: consultor + avatar */}
           <div className="flex justify-between items-center mt-1">
-            <span className="text-muted text-[10px] font-medium">
+            <span className="text-secondary text-[11px] font-medium">
               {deal.consultant_name} · {deal.days_in_stage} {deal.days_in_stage === 1 ? "dia" : "dias"}
             </span>
             <div 

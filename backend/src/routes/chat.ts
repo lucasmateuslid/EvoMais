@@ -3,14 +3,53 @@ import { z } from 'zod';
 
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
 import { emitTenantEvent } from '../realtime/socket.js';
+import { createEvolutionMessageRecord } from '../services/evolutionPersistence.js';
+import { sendEvolutionMessage } from '../services/evolutionService.js';
 import { adminSupabase } from '../services/supabase.js';
 
 const sendMessageSchema = z.object({
   text: z.string().min(1),
 });
 
+const updateConversationSchema = z.object({
+  status: z.enum(['open', 'in_progress', 'resolved', 'closed']),
+  closed_at: z.string().datetime().optional().nullable(),
+});
+
 export const chatRouter = Router();
 chatRouter.use(requireAuth);
+
+function normalizePhone(value: string | null | undefined) {
+  return String(value || '').replace(/\D/g, '');
+}
+
+function extractEvolutionMessageId(payload: unknown) {
+  if (!payload || typeof payload !== 'object') {
+    return null;
+  }
+
+  const queue: unknown[] = [payload];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+
+    if (!current || typeof current !== 'object') {
+      continue;
+    }
+
+    const record = current as Record<string, unknown>;
+    for (const key of ['messageId', 'message_id', 'id']) {
+      const candidate = record[key];
+      if (typeof candidate === 'string' && candidate.trim()) {
+        return candidate.trim();
+      }
+    }
+
+    queue.push(...Object.values(record));
+  }
+
+  return null;
+}
 
 chatRouter.get('/vendors/:vendorId/conversations', async (req, res, next) => {
   try {
@@ -89,7 +128,7 @@ chatRouter.get('/vendors/:vendorId/conversations/:conversationId/messages', asyn
 
     const { data: conversation, error: conversationError } = await supabase
       .from('conversations')
-      .select('id')
+      .select('id, contact_phone')
       .eq('id', conversationId)
       .eq('seller_id', vendorId)
       .eq('organization_id', request.organizationId)
@@ -131,6 +170,69 @@ chatRouter.get('/vendors/:vendorId/conversations/:conversationId/messages', asyn
   }
 });
 
+chatRouter.patch('/vendors/:vendorId/conversations/:conversationId', async (req, res, next) => {
+  try {
+    const request = req as AuthenticatedRequest;
+    const supabase = request.supabase;
+
+    if (!supabase || !request.organizationId) {
+      return res.status(401).json({ error: 'unauthorized' });
+    }
+
+    const { vendorId, conversationId } = req.params;
+    const payload = updateConversationSchema.parse(req.body);
+
+    const { data: conversation, error: conversationError } = await supabase
+      .from('conversations')
+      .select('id')
+      .eq('id', conversationId)
+      .eq('seller_id', vendorId)
+      .eq('organization_id', request.organizationId)
+      .maybeSingle();
+
+    if (conversationError) {
+      return next(conversationError);
+    }
+
+    if (!conversation) {
+      return res.status(404).json({ error: 'not_found' });
+    }
+
+    const shouldClose = payload.status === 'resolved' || payload.status === 'closed';
+    const closedAt = shouldClose
+      ? payload.closed_at || new Date().toISOString()
+      : null;
+
+    const { data: updated, error } = await supabase
+      .from('conversations')
+      .update({
+        status: payload.status,
+        closed_at: closedAt,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', conversationId)
+      .eq('organization_id', request.organizationId)
+      .select('id, status, closed_at, last_message_at')
+      .single();
+
+    if (error) {
+      return next(error);
+    }
+
+    emitTenantEvent(request.organizationId, 'chat:conversation_updated', {
+      conversationId,
+      vendorId,
+      status: updated.status,
+      closedAt: updated.closed_at,
+      lastMessageAt: updated.last_message_at,
+    });
+
+    res.json({ conversation: updated });
+  } catch (error) {
+    next(error);
+  }
+});
+
 chatRouter.post('/vendors/:vendorId/conversations/:conversationId/messages', async (req, res, next) => {
   try {
     const request = req as AuthenticatedRequest;
@@ -145,7 +247,7 @@ chatRouter.post('/vendors/:vendorId/conversations/:conversationId/messages', asy
 
     const { data: conversation, error: conversationError } = await supabase
       .from('conversations')
-      .select('id')
+      .select('id, contact_phone')
       .eq('id', conversationId)
       .eq('seller_id', vendorId)
       .eq('organization_id', request.organizationId)
@@ -165,6 +267,48 @@ chatRouter.post('/vendors/:vendorId/conversations/:conversationId/messages', asy
       .eq('user_id', request.userId || '')
       .maybeSingle();
 
+    const { data: seller } = await supabase
+      .from('sellers')
+      .select('phone')
+      .eq('id', vendorId)
+      .eq('organization_id', request.organizationId)
+      .maybeSingle();
+
+    const sellerPhone = normalizePhone(seller?.phone);
+
+    let messageStatus: 'pending' | 'delivered' = 'delivered';
+
+    if (sellerPhone) {
+      const { data: connection } = await supabase
+        .from('connections')
+        .select('instance_name, api_provider')
+        .eq('organization_id', request.organizationId)
+        .eq('phone', sellerPhone)
+        .order('created_at', { ascending: false })
+        .maybeSingle();
+
+      if (connection?.api_provider === 'evolution') {
+        const evolutionResponse = await sendEvolutionMessage({
+          instanceName: connection.instance_name,
+          number: normalizePhone(conversation.contact_phone),
+          text: payload.text,
+        });
+
+        messageStatus = evolutionResponse.status === 'sent' ? 'delivered' : 'pending';
+
+        await createEvolutionMessageRecord(supabase, {
+          organizationId: request.organizationId,
+          instanceName: connection.instance_name,
+          remoteJid: normalizePhone(conversation.contact_phone),
+          messageId: extractEvolutionMessageId(evolutionResponse.payload),
+          direction: 'outbound',
+          content: payload.text,
+          status: messageStatus,
+          rawPayload: evolutionResponse.payload ?? null,
+        });
+      }
+    }
+
     const { data: message, error } = await supabase
       .from('messages')
       .insert({
@@ -174,7 +318,7 @@ chatRouter.post('/vendors/:vendorId/conversations/:conversationId/messages', asy
         sender_type: 'seller',
         sender_name: profile?.name || 'Atendente',
         content: payload.text,
-        status: 'delivered',
+        status: messageStatus,
       })
       .select('id, sender_type, sender_name, content, status, created_at')
       .single();

@@ -11,15 +11,15 @@ export default function ReportsPage() {
     <div className="space-y-6 max-w-[1400px] mx-auto pb-10">
       <div className="bg-surface-card border border-divider-subtle rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto">
-          <span className="text-sm font-medium text-secondary">Período:</span>
+          <span className="text-sm font-semibold text-primary">Período:</span>
           <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-            <button className="flex-1 sm:flex-none px-4 py-2 rounded-lg bg-surface border border-divider-subtle text-sm font-medium text-secondary hover:text-primary transition-colors">
+            <button className="flex-1 sm:flex-none px-4 py-2 rounded-lg bg-surface border border-divider-subtle text-sm font-semibold text-secondary hover:bg-surface-input hover:text-primary transition-colors">
               Hoje
             </button>
             <button className="flex-1 sm:flex-none px-4 py-2 rounded-lg bg-brand text-white text-sm font-bold shadow-sm">
               Semana
             </button>
-            <button className="flex-1 sm:flex-none px-4 py-2 rounded-lg bg-surface border border-divider-subtle text-sm font-medium text-secondary hover:text-primary transition-colors">
+            <button className="flex-1 sm:flex-none px-4 py-2 rounded-lg bg-surface border border-divider-subtle text-sm font-semibold text-secondary hover:bg-surface-input hover:text-primary transition-colors">
               Mês
             </button>
           </div>
@@ -39,7 +39,7 @@ export default function ReportsPage() {
           </svg>
           <h2 className="text-lg font-bold text-primary">Resumo Executivo</h2>
         </div>
-        <p className="text-secondary text-sm leading-relaxed">
+        <p className="text-primary/90 text-sm font-medium leading-relaxed">
           Na última semana, a equipe comercial manteve um ritmo consistente de atendimento com {conversas} conversas ativas e {mensagens.toLocaleString('pt-BR')} mensagens trocadas. Destaque para o vendedor Carlos que converteu 3 leads quentes. Identificamos oportunidades de melhoria no tempo de resposta inicial e na abordagem de objeções sobre preço.
         </p>
 
@@ -49,7 +49,7 @@ export default function ReportsPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
             <p className="text-3xl font-bold text-primary mb-1">{conversas}</p>
-            <p className="text-sm font-medium text-muted">Conversas</p>
+            <p className="text-sm font-semibold text-secondary">Conversas</p>
           </div>
           
           <div className="bg-surface border border-divider-subtle rounded-xl p-6 text-center shadow-sm">
@@ -57,7 +57,7 @@ export default function ReportsPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
             </svg>
             <p className="text-3xl font-bold text-primary mb-1">{mensagens}</p>
-            <p className="text-sm font-medium text-muted">Mensagens</p>
+            <p className="text-sm font-semibold text-secondary">Mensagens</p>
           </div>
 
           <div className="bg-surface border border-divider-subtle rounded-xl p-6 text-center shadow-sm">
@@ -66,7 +66,7 @@ export default function ReportsPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z" />
             </svg>
             <p className="text-3xl font-bold text-primary mb-1">{leadsQuentes}</p>
-            <p className="text-sm font-medium text-muted">Leads Quentes</p>
+            <p className="text-sm font-semibold text-secondary">Leads Quentes</p>
           </div>
 
           <div className="bg-surface border border-divider-subtle rounded-xl p-6 text-center shadow-sm">
@@ -75,7 +75,7 @@ export default function ReportsPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
             </svg>
             <p className="text-3xl font-bold text-primary mb-1">{altaIntencao}</p>
-            <p className="text-sm font-medium text-muted">Alta Intenção</p>
+            <p className="text-sm font-semibold text-secondary">Alta Intenção</p>
           </div>
         </div>
       </div>

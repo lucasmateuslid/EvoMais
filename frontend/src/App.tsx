@@ -16,6 +16,7 @@ import CRMPage from './pages/CRMPage';
 import MetricsPage from './pages/MetricsPage';
 import ReportsPage from './pages/ReportsPage';
 import SettingsPage from './pages/SettingsPage';
+import TeamPage from './pages/TeamPage';
 import ChatPage from './pages/ChatPage';
 
 // Admin Pages
@@ -76,6 +77,7 @@ export default function App() {
               <Route path="/vendors" element={<VendorsPage />} />
               <Route path="/metrics" element={<MetricsPage />} />
               <Route path="/reports" element={<ReportsPage />} />
+              <Route path="/team" element={<TeamPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
             <Route path="/chat/:vendorId/:conversationId" element={<ChatPage />} />

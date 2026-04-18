@@ -22,7 +22,7 @@ export default function CRMPage() {
 
   if (error) {
     return (
-      <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+      <div className="p-4 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-lg text-red-700 dark:text-red-300 text-sm">
         {error}
       </div>
     );
@@ -33,7 +33,7 @@ export default function CRMPage() {
       {/* Cabeçalho */}
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-2">
         <div>
-          <p className="text-muted text-sm">
+          <p className="text-secondary text-sm font-medium">
             {deals.length} negócios ativos · {formatarValor(totalPipeline)} em pipeline
           </p>
         </div>
@@ -47,7 +47,7 @@ export default function CRMPage() {
                 className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all capitalize ${
                   visualizacao === v 
                     ? "bg-surface shadow-sm text-brand dark:text-brand-light" 
-                    : "text-muted hover:text-secondary"
+                    : "text-secondary hover:text-primary"
                 }`}
               >
                 {v}
@@ -68,7 +68,7 @@ export default function CRMPage() {
         <KanbanBoard deals={deals} onDragEnd={updateDealStage} />
       ) : (
         <div className="bg-surface border border-divider-subtle rounded-2xl p-10 text-center">
-          <p className="text-muted text-sm">Visualização em lista — em desenvolvimento.</p>
+          <p className="text-secondary text-sm">Visualização em lista — em desenvolvimento.</p>
         </div>
       )}
     </div>

@@ -13,4 +13,16 @@ export const logger = pino({
 
     return correlationId ? { correlationId } : {};
   },
+  transport:
+    config.NODE_ENV === 'production'
+      ? undefined
+      : {
+          target: 'pino-pretty',
+          options: {
+            colorize: true,
+            translateTime: 'SYS:standard',
+            ignore: 'pid,hostname',
+            singleLine: false,
+          },
+        },
 });

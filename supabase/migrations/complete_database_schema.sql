@@ -83,6 +83,9 @@ CREATE TABLE IF NOT EXISTS conversations (
   status TEXT DEFAULT 'open',
   started_at TIMESTAMPTZ DEFAULT NOW(),
   last_message_at TIMESTAMPTZ,
+  channel TEXT NOT NULL DEFAULT 'whatsapp',
+  tags TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+  closed_at TIMESTAMPTZ,
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(seller_id, contact_phone)
 );
@@ -207,6 +210,9 @@ CREATE INDEX IF NOT EXISTS idx_conversations_seller_id ON conversations(seller_i
 CREATE INDEX IF NOT EXISTS idx_conversations_contact_phone ON conversations(contact_phone);
 CREATE INDEX IF NOT EXISTS idx_conversations_status ON conversations(status);
 CREATE INDEX IF NOT EXISTS idx_conversations_started_at ON conversations(started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_conversations_channel ON conversations(channel);
+CREATE INDEX IF NOT EXISTS idx_conversations_closed_at ON conversations(closed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_conversations_tags ON conversations USING GIN (tags);
 CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_messages_seller_id ON messages(seller_id);
 CREATE INDEX IF NOT EXISTS idx_messages_organization_id ON messages(organization_id);

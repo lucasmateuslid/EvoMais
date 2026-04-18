@@ -1,0 +1,38 @@
+version: '3.9'
+
+services:
+  evolution-api:
+    container_name: evolution_api
+    image: atendai/evolution-api:v2.1.1
+    restart: always
+    ports:
+      - "8080:8080"
+    env_file:
+      - ./backend/.env
+    environment:
+      # Variavel minima exigida pela Evolution API
+      AUTHENTICATION_API_KEY: ${AUTHENTICATION_API_KEY:-mude-me}
+      # Dentro da rede Docker, use o nome do servico Redis
+      CACHE_REDIS_URI: ${CACHE_REDIS_URI:-redis://redis:6379/6}
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - evolution_instances:/evolution/instances
+
+  redis:
+    image: redis:7-alpine
+    container_name: evolution_redis
+    restart: always
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - evolution_redis_data:/data
+
+volumes:
+  evolution_instances:
+  evolution_redis_data:

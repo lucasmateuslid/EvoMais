@@ -21,9 +21,9 @@ export function FollowupAlert({ deals }: FollowupAlertProps) {
       <span className="text-red-600 dark:text-red-400 text-sm font-bold">
         {vencidos} follow-up{vencidos > 1 ? "s" : ""} vencido{vencidos > 1 ? "s" : ""}
       </span>
-      <span className="text-divider-soft text-xs">|</span>
+      <span className="text-secondary text-xs">|</span>
       <span className="text-secondary text-sm font-medium">{hoje} vencem hoje</span>
-      <span className="text-divider-soft text-xs">|</span>
+      <span className="text-secondary text-xs">|</span>
       <span className="text-secondary text-sm font-medium">{formatarValor(valorRisco)} em risco</span>
       <button className="ml-auto px-4 py-1.5 rounded-lg border border-red-200 dark:border-red-500/30 bg-white dark:bg-transparent text-red-600 dark:text-red-400 text-xs font-bold hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors shadow-sm dark:shadow-none">
         Ver pendências →

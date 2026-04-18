@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { ChatMessage, AIContext } from '../types/ai';
 import { aiService } from '../services/aiService';
+import { USER_MESSAGE_MAX_CHARS } from '../constants/ai';
 
 export function useAIChat(context: AIContext) {
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -14,12 +15,15 @@ export function useAIChat(context: AIContext) {
   const [loading, setLoading] = useState(false);
 
   const sendMessage = useCallback(async (text: string) => {
-    if (!text.trim() || loading) return;
+    const normalizedText = text.trim();
+    if (!normalizedText || loading) return;
+
+    const safeText = normalizedText.slice(0, USER_MESSAGE_MAX_CHARS);
 
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
       type: 'user',
-      text,
+      text: safeText,
       created_at: new Date().toISOString()
     };
 
@@ -27,7 +31,7 @@ export function useAIChat(context: AIContext) {
     setLoading(true);
 
     try {
-      const aiResponse = await aiService.chat(text, messages, context);
+      const aiResponse = await aiService.chat(safeText, messages, context);
       const aiMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         type: 'ai',

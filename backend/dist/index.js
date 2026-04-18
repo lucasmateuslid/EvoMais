@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import cors from 'cors';
 import express from 'express';
-import { config } from './config.js';
+import { config, backendCapabilities } from './config.js';
 import { closeQueueConnections } from './jobs/queue.js';
 import { startWorkers, stopWorkers } from './jobs/worker.js';
 import { withCorrelationId } from './middleware/correlationId.js';
@@ -11,6 +11,7 @@ import { initializeRealtime, shutdownRealtime } from './realtime/socket.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { aiRouter } from './routes/ai.js';
+import { adminRouter } from './routes/admin.js';
 import { authRouter } from './routes/auth.js';
 import { chatRouter } from './routes/chat.js';
 import { connectionsRouter } from './routes/connections.js';
@@ -34,6 +35,18 @@ else {
         hasRedisUrl: Boolean(config.REDIS_URL),
     }, 'queue workers disabled');
 }
+if (backendCapabilities.ai) {
+    logger.info({
+        aiProviders: backendCapabilities.aiProviders,
+        aiProviderOrder: config.AI_PROVIDER_ORDER,
+    }, 'ai providers configured');
+}
+else {
+    logger.warn({
+        aiProviders: backendCapabilities.aiProviders,
+        aiProviderOrder: config.AI_PROVIDER_ORDER,
+    }, 'no ai provider configured');
+}
 const app = express();
 app.use(cors({
     origin: config.CORS_ORIGIN,
@@ -41,7 +54,12 @@ app.use(cors({
 }));
 app.use(withCorrelationId);
 app.use(resolveTenantFromHost);
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({
+    limit: '1mb',
+    verify: (req, _res, buffer) => {
+        req.rawBody = buffer.toString('utf8');
+    },
+}));
 app.use(requestLogger);
 app.get('/', (_req, res) => {
     res.json({
@@ -52,6 +70,7 @@ app.get('/', (_req, res) => {
 app.use('/health', healthRouter);
 app.use('/api/tenant', tenantRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/admin', adminRouter);
 app.use('/api/tenants', tenantsRouter);
 app.use('/api/team', teamRouter);
 app.use('/api/ai', aiRouter);

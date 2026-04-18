@@ -356,7 +356,7 @@ FUNÇÃO DE SEGURANÇA:
         ↓
 2. Evolution Webhook dispara
         ↓
-3. Backend recebe em /api/evolution/webhook
+3. Backend recebe em /webhook/evolution
         ↓
 4. Cria/atualiza conversation
         ↓

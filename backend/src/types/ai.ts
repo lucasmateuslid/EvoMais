@@ -1,3 +1,7 @@
+export const AI_PROVIDERS = ['gemini', 'openai', 'anthropic', 'deepseek', 'groq'] as const;
+
+export type AIProvider = (typeof AI_PROVIDERS)[number];
+export type AIProviderPreference = AIProvider | 'auto';
 export type ChatRole = 'user' | 'ai';
 
 export interface ChatMessage {
@@ -23,9 +27,10 @@ export interface ChatRequest {
   message: string;
   history?: ChatMessage[];
   context: AIContext;
+  provider?: AIProviderPreference;
 }
 
 export interface ChatResponse {
   text: string;
-  provider: 'cache' | 'gemini' | 'fallback';
+  provider: 'cache' | AIProvider | 'fallback';
 }

@@ -1,4 +1,43 @@
 services:
+  backend:
+    build:
+      context: ./backend
+    container_name: evomais-backend
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      CORS_ORIGIN: http://localhost:3000
+      REDIS_URL: redis://redis:6379
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      EVOLUTION_API_URL: ${EVOLUTION_API_URL:-http://localhost:8080}
+      EVOLUTION_WEBHOOK_SECRET: ${EVOLUTION_WEBHOOK_SECRET}
+      ENABLE_WORKERS: ${ENABLE_WORKERS:-true}
+      ENABLE_WEBSOCKETS: ${ENABLE_WEBSOCKETS:-true}
+      TENANT_ROOT_DOMAIN: ${TENANT_ROOT_DOMAIN:-fulana.com}
+      TENANT_LOCAL_ROOT_DOMAIN: ${TENANT_LOCAL_ROOT_DOMAIN:-fulana.local}
+    depends_on:
+      - redis
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_BACKEND_URL: http://backend:4000
+    container_name: evomais-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
   redis:
     image: redis:7-alpine
     container_name: evomais-redis

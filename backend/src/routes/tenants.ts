@@ -25,6 +25,17 @@ const updateTenantSchema = z.object({
   status: z.enum(['active', 'inactive']).optional(),
 });
 
+const tenantUserRoleSchema = z.enum(['user', 'viewer', 'admin', 'super_admin']);
+
+const createTenantUserSchema = z.object({
+  organization_id: z.string().uuid().optional(),
+  name: z.string().min(1),
+  email: z.string().email(),
+  password: z.string().min(8),
+  phone: z.string().optional(),
+  role: tenantUserRoleSchema.default('user'),
+});
+
 const tenantRouter = Router();
 const tenantsRouter = Router();
 
@@ -48,6 +59,14 @@ async function getCurrentProfile(request: AuthenticatedRequest) {
 
 function isSuperAdmin(profile: { role?: string | null } | null) {
   return profile?.role === 'super_admin';
+}
+
+function canCreateRole(currentRole?: string | null, targetRole?: string) {
+  if (currentRole === 'super_admin') {
+    return true;
+  }
+
+  return targetRole !== 'super_admin';
 }
 
 tenantRouter.get('/current', async (req, res, next) => {
@@ -182,6 +201,117 @@ tenantsRouter.post('/', async (req, res, next) => {
 
     res.status(201).json({
       tenant: data,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+tenantsRouter.post('/users', async (req, res, next) => {
+  try {
+    const request = req as AuthenticatedRequest;
+    const currentProfile = await getCurrentProfile(request);
+
+    if (!currentProfile) {
+      throw new AppError({
+        code: 'forbidden',
+        statusCode: 403,
+        domain: 'auth',
+        message: 'Current profile not found.',
+      });
+    }
+
+    const payload = createTenantUserSchema.parse(req.body);
+
+    if (!canCreateRole(currentProfile.role, payload.role)) {
+      throw new AppError({
+        code: 'forbidden',
+        statusCode: 403,
+        domain: 'auth',
+        message: 'Only super admins can create super admin users.',
+      });
+    }
+
+    const organizationId = isSuperAdmin(currentProfile)
+      ? payload.organization_id
+      : currentProfile.organization_id;
+
+    if (!organizationId) {
+      throw new AppError({
+        code: 'validation_error',
+        statusCode: 400,
+        domain: 'validation',
+        message: 'organization_id is required.',
+      });
+    }
+
+    if (!isSuperAdmin(currentProfile) && payload.organization_id && payload.organization_id !== currentProfile.organization_id) {
+      throw new AppError({
+        code: 'forbidden',
+        statusCode: 403,
+        domain: 'auth',
+        message: 'Organization mismatch for the current admin.',
+      });
+    }
+
+    const { data: organization, error: organizationError } = await adminSupabase
+      .from('organizations')
+      .select('id, name, email, status')
+      .eq('id', organizationId)
+      .maybeSingle();
+
+    if (organizationError) {
+      return next(organizationError);
+    }
+
+    if (!organization) {
+      return res.status(404).json({ error: 'organization_not_found' });
+    }
+
+    const authAdmin = adminSupabase.auth.admin as {
+      createUser: (input: Record<string, unknown>) => Promise<{ data: { user: { id: string } | null } | null; error: Error | null }>;
+      deleteUser: (userId: string) => Promise<{ error: Error | null }>;
+    };
+
+    const { data: createdUserData, error: createUserError } = await authAdmin.createUser({
+      email: payload.email.toLowerCase(),
+      password: payload.password,
+      email_confirm: true,
+      user_metadata: {
+        name: payload.name,
+        organization_id: organizationId,
+        role: payload.role,
+        phone: payload.phone || null,
+      },
+    });
+
+    if (createUserError || !createdUserData?.user?.id) {
+      return next(createUserError || new Error('failed to create auth user'));
+    }
+
+    const { data: profile, error: profileError } = await adminSupabase
+      .from('profiles')
+      .insert({
+        user_id: createdUserData.user.id,
+        organization_id: organizationId,
+        role: payload.role,
+        name: payload.name,
+        email: payload.email.toLowerCase(),
+        phone: payload.phone || null,
+        status: 'active',
+      })
+      .select('*')
+      .single();
+
+    if (profileError) {
+      await authAdmin.deleteUser(createdUserData.user.id).catch(() => null);
+      return next(profileError);
+    }
+
+    res.status(201).json({
+      user: createdUserData.user,
+      profile,
+      organization,
     });
   } catch (error) {
     next(error);

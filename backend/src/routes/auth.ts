@@ -205,7 +205,7 @@ authRouter.post('/forgot-password', async (req, res, next) => {
     });
 
     const { error } = await authClient.auth.resetPasswordForEmail(payload.email, {
-      redirectTo: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password`,
+      redirectTo: `${config.FRONTEND_URL}/reset-password`,
     });
 
     if (error) {
@@ -234,17 +234,14 @@ authRouter.post('/reset-password', async (req, res, next) => {
       token: z.string().optional(),
       accessToken: z.string().optional(),
       refreshToken: z.string().optional(),
+      code: z.string().optional(),
+      tokenHash: z.string().optional(),
+      otpType: z.string().optional(),
       password: z.string().min(6),
     }).parse(req.body);
 
-    const accessToken = payload.accessToken || payload.token;
-
-    if (!accessToken || !payload.refreshToken) {
-      return res.status(400).json({
-        error: 'invalid_token',
-        message: 'Use o fluxo de recuperação no navegador para concluir a redefinição.',
-      });
-    }
+    let accessToken = payload.accessToken || payload.token;
+    let refreshToken = payload.refreshToken;
 
     const authClient = createClient(config.SUPABASE_URL, config.SUPABASE_ANON_KEY, {
       auth: {
@@ -253,9 +250,52 @@ authRouter.post('/reset-password', async (req, res, next) => {
       },
     });
 
+    if (payload.code) {
+      const { error: exchangeError } = await authClient.auth.exchangeCodeForSession(payload.code);
+
+      if (exchangeError) {
+        return res.status(401).json({
+          error: 'invalid_token',
+          message: 'Token inválido ou expirado.',
+        });
+      }
+    }
+
+    if (payload.tokenHash) {
+      const { error: verifyError } = await authClient.auth.verifyOtp({
+        token_hash: payload.tokenHash,
+        type: (payload.otpType as any) || 'recovery',
+      });
+
+      if (verifyError) {
+        return res.status(401).json({
+          error: 'invalid_token',
+          message: 'Token inválido ou expirado.',
+        });
+      }
+    }
+
+    const { data: currentSessionData } = await authClient.auth.getSession();
+    const currentSession = currentSessionData.session;
+
+    if (!accessToken && currentSession?.access_token) {
+      accessToken = currentSession.access_token;
+    }
+
+    if (!refreshToken && currentSession?.refresh_token) {
+      refreshToken = currentSession.refresh_token;
+    }
+
+    if (!accessToken || !refreshToken) {
+      return res.status(400).json({
+        error: 'invalid_token',
+        message: 'Use o fluxo de recuperação no navegador para concluir a redefinição.',
+      });
+    }
+
     const { error: sessionError } = await authClient.auth.setSession({
       access_token: accessToken,
-      refresh_token: payload.refreshToken,
+      refresh_token: refreshToken,
     });
 
     if (sessionError) {

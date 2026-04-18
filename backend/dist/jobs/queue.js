@@ -1,5 +1,6 @@
 import { Queue } from 'bullmq';
 import { config } from '../config.js';
+// Cria uma fila com as configurações padrão para tentativas, backoff e remoção de jobs antigos
 function createQueue(name) {
     if (!config.REDIS_URL) {
         return null;
