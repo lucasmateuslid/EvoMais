@@ -4,12 +4,7 @@ import { z } from 'zod';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
 import { logger } from '../logger.js';
 import { emitTenantEvent } from '../realtime/socket.js';
-import { createEvolutionInstance } from '../services/evolutionService.js';
-import {
-  createEvolutionInstanceRecord,
-  extractEvolutionQrCode,
-  updateEvolutionInstanceRecord,
-} from '../services/evolutionPersistence.js';
+import { provisionEvolutionInstance } from '../services/evolutionProvisioning.js';
 import { generateUniqueConnectionInstanceName } from '../utils/instanceName.js';
 
 export const vendorsRouter = Router();
@@ -78,25 +73,18 @@ vendorsRouter.post('/', async (req, res, next) => {
 
       createdConnection = connection;
 
-      try {
-        await createEvolutionInstanceRecord(supabase, {
-          organizationId: request.organizationId,
-          connectionId: connection.id,
-          instanceName,
-          sellerId: seller.id,
-          status: 'creating',
-        });
-
-        const evolutionResponse = await createEvolutionInstance({ instanceName });
-
-        await updateEvolutionInstanceRecord(supabase, request.organizationId, instanceName, {
-          status: evolutionResponse.status === 'sent' ? 'generating_qr' : 'queued',
-          qrCode: extractEvolutionQrCode(evolutionResponse.payload ?? null),
-          rawPayload: evolutionResponse.payload ?? null,
-          errorMessage: evolutionResponse.status === 'queued' ? evolutionResponse.message : null,
-        });
-      } catch (provisioningError) {
-        logger.warn({ provisioningError, instanceName, organizationId: request.organizationId }, 'Evolution provisioning failed during vendor creation');
+      if (payload.api_provider === 'evolution') {
+        try {
+          await provisionEvolutionInstance({
+            supabase,
+            organizationId: request.organizationId,
+            connectionId: connection.id,
+            instanceName,
+            sellerId: seller.id,
+          });
+        } catch (provisioningError) {
+          logger.warn({ provisioningError, instanceName, organizationId: request.organizationId }, 'Evolution provisioning failed during vendor creation');
+        }
       }
     }
 

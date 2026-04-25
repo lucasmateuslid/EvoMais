@@ -1,31 +1,4 @@
-import { useAuthStore } from '../store/authStore';
-
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL?.replace(/\/$/, '') || '';
-
-if (!BACKEND_URL) {
-  throw new Error('VITE_BACKEND_URL nao configurado.');
-}
-
-function getAdminToken() {
-  return useAuthStore.getState().accessToken;
-}
-
-async function adminAuthorizedFetch(path: string, init?: RequestInit) {
-  const token = getAdminToken();
-
-  if (!token) {
-    throw new Error('Super admin nao autenticado');
-  }
-
-  return fetch(`${BACKEND_URL}${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      ...(init?.headers || {}),
-    },
-  });
-}
+import { authorizedFetch } from './httpClient';
 
 export interface AdminStatsResponse {
   stats: {
@@ -62,7 +35,7 @@ export interface AdminLogsResponse {
 
 export const adminService = {
   async getStats(): Promise<AdminStatsResponse> {
-    const response = await adminAuthorizedFetch('/api/admin/stats');
+    const response = await authorizedFetch('/api/admin/stats');
 
     if (!response.ok) {
       throw new Error('Erro ao carregar estatisticas admin');
@@ -72,7 +45,7 @@ export const adminService = {
   },
 
   async getJobs(): Promise<AdminJobsResponse> {
-    const response = await adminAuthorizedFetch('/api/admin/jobs');
+    const response = await authorizedFetch('/api/admin/jobs');
 
     if (!response.ok) {
       throw new Error('Erro ao carregar status de jobs');
@@ -82,7 +55,7 @@ export const adminService = {
   },
 
   async getLogs(): Promise<AdminLogsResponse> {
-    const response = await adminAuthorizedFetch('/api/admin/logs');
+    const response = await authorizedFetch('/api/admin/logs');
 
     if (!response.ok) {
       throw new Error('Erro ao carregar status de logs');

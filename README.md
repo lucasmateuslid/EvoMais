@@ -38,10 +38,12 @@ O EvoMais integra:
 
 ## Estrutura resumida
 
-- `frontend/`: aplicação web (UI, páginas, hooks, serviços)
-- `backend/`: API e integrações
+- `frontend/`: aplicação principal da operação comercial
+- `admin-frontend/`: frontend dedicado do super admin
+- `backend/`: API principal e integrações
+- `backend/src/adminIndex.ts`: entrada dedicada do backend admin
 - `supabase/`: schema, migrations e dados de apoio
-- `docker-compose.yml`: Redis local para fila/cache
+- `docker-compose.yml`: orquestra backend, backend-admin, frontend, frontend-admin e Redis
 
 ## Como funciona (visão geral)
 
@@ -92,6 +94,7 @@ Na raiz do projeto:
 
 ```bash
 npm run install:frontend
+npm run install:admin-frontend
 npm run install:backend
 ```
 
@@ -101,25 +104,42 @@ npm run install:backend
 docker compose up -d redis
 ```
 
-3. Rodar frontend:
+3. Rodar frontend principal:
 
 ```bash
 npm run dev
 ```
 
-4. Rodar backend (outro terminal):
+4. Rodar backend principal (outro terminal):
 
 ```bash
 npm run dev:backend
 ```
 
+5. Rodar frontend admin (outro terminal):
+
+```bash
+npm run dev:admin-frontend
+```
+
+6. Rodar backend admin (outro terminal):
+
+```bash
+npm run dev:admin-backend
+```
+
 ## Scripts úteis (raiz)
 
-- `npm run dev`: frontend em desenvolvimento
-- `npm run dev:backend`: backend em desenvolvimento
-- `npm run build`: build do frontend
-- `npm run build:backend`: build do backend
-- `npm run start:backend`: backend em modo produção
+- `npm run dev`: frontend principal em desenvolvimento
+- `npm run dev:admin-frontend`: frontend admin em desenvolvimento
+- `npm run dev:backend`: backend principal em desenvolvimento
+- `npm run dev:admin-backend`: backend admin em desenvolvimento
+- `npm run build`: build do frontend principal
+- `npm run build:admin-frontend`: build do frontend admin
+- `npm run build:backend`: build do backend principal
+- `npm run build:admin-backend`: build do backend admin
+- `npm run start:backend`: backend principal em modo produção
+- `npm run start:admin-backend`: backend admin em modo produção
 
 ## Documentação adicional
 

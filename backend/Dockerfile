@@ -1,3 +1,5 @@
+ARG BUILD_SCRIPT=build
+
 FROM node:22-alpine AS deps
 
 WORKDIR /app
@@ -5,9 +7,11 @@ COPY package*.json ./
 RUN npm install
 
 FROM deps AS build
+ARG BUILD_SCRIPT
 COPY tsconfig.json ./
+COPY tsconfig.admin.json ./
 COPY src ./src
-RUN npm run build
+RUN npm run ${BUILD_SCRIPT}
 
 FROM node:22-alpine AS runner
 

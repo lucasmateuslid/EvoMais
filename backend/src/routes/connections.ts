@@ -4,12 +4,7 @@ import { z } from 'zod';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
 import { logger } from '../logger.js';
 import { emitTenantEvent } from '../realtime/socket.js';
-import { createEvolutionInstance, reconnectEvolutionInstance } from '../services/evolutionService.js';
-import {
-  createEvolutionInstanceRecord,
-  extractEvolutionQrCode,
-  updateEvolutionInstanceRecord,
-} from '../services/evolutionPersistence.js';
+import { provisionEvolutionInstance } from '../services/evolutionProvisioning.js';
 import { generateUniqueConnectionInstanceName } from '../utils/instanceName.js';
 
 const connectionSchema = z.object({
@@ -26,46 +21,6 @@ const updateStatusSchema = z.object({
 export const connectionsRouter = Router();
 
 connectionsRouter.use(requireAuth);
-
-async function provisionEvolutionInstance(params: {
-  supabase: NonNullable<AuthenticatedRequest['supabase']>;
-  organizationId: string;
-  connectionId: string;
-  instanceName: string;
-  sellerId?: string | null;
-}) {
-  const { supabase, organizationId, connectionId, instanceName, sellerId = null } = params;
-
-  await createEvolutionInstanceRecord(supabase, {
-    organizationId,
-    connectionId,
-    instanceName,
-    sellerId,
-    status: 'creating',
-  });
-
-  const creationResponse = await createEvolutionInstance({ instanceName });
-  const creationQrCode = extractEvolutionQrCode(creationResponse.payload ?? null);
-
-  const evolutionResponse = (creationResponse.status !== 'sent' || !creationQrCode)
-    ? await reconnectEvolutionInstance(instanceName)
-    : creationResponse;
-
-  const qrCode = extractEvolutionQrCode(evolutionResponse.payload ?? null) || creationQrCode;
-
-  await updateEvolutionInstanceRecord(supabase, organizationId, instanceName, {
-    status: qrCode
-      ? 'qr_ready'
-      : evolutionResponse.status === 'sent'
-        ? 'generating_qr'
-        : 'queued',
-    qrCode,
-    rawPayload: evolutionResponse.payload ?? null,
-    errorMessage: evolutionResponse.status !== 'sent' ? evolutionResponse.message : null,
-  });
-
-  return evolutionResponse;
-}
 
 connectionsRouter.get('/', async (req, res, next) => {
   try {

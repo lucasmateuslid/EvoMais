@@ -329,7 +329,9 @@ metricsRouter.get('/dashboard', async (req, res, next) => {
         return;
       }
 
-      const waitMinutes = Number(((firstSeller.getTime() - firstContact.getTime()) / 60000).toFixed(1));
+      const contact = firstContact as Date;
+      const seller = firstSeller as Date;
+      const waitMinutes = Number(((seller.getTime() - contact.getTime()) / 60000).toFixed(1));
       waitTimesAll.push(waitMinutes);
 
       const dayKey = conversation.startedAt.toISOString().slice(0, 10);

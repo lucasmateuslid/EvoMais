@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import rateLimit from 'express-rate-limit';
 import { Router } from 'express';
 import { z } from 'zod';
 
@@ -13,11 +14,33 @@ const loginSchema = z.object({
 
 export const authRouter = Router();
 
+const loginRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'too_many_requests',
+    message: 'Too many login attempts. Please try again later.',
+  },
+});
+
+const recoveryRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'too_many_requests',
+    message: 'Too many password reset attempts. Please try again later.',
+  },
+});
+
 function hasTenantMismatch(req: TenantAwareRequest, organizationId?: string | null) {
   return Boolean(req.tenantOrganizationId && organizationId && req.tenantOrganizationId !== organizationId);
 }
 
-authRouter.post('/login', async (req, res, next) => {
+authRouter.post('/login', loginRateLimit, async (req, res, next) => {
   try {
     if (!config.SUPABASE_URL || !config.SUPABASE_ANON_KEY) {
       return res.status(503).json({
@@ -119,7 +142,7 @@ authRouter.post('/logout', (_req, res) => {
   res.status(204).send();
 });
 
-authRouter.post('/super-admin/login', async (req, res, next) => {
+authRouter.post('/super-admin/login', loginRateLimit, async (req, res, next) => {
   try {
     if (!config.SUPABASE_URL || !config.SUPABASE_ANON_KEY) {
       return res.status(503).json({
@@ -184,7 +207,7 @@ authRouter.post('/super-admin/login', async (req, res, next) => {
   }
 });
 
-authRouter.post('/forgot-password', async (req, res, next) => {
+authRouter.post('/forgot-password', recoveryRateLimit, async (req, res, next) => {
   try {
     if (!config.SUPABASE_URL || !config.SUPABASE_ANON_KEY) {
       return res.status(503).json({
@@ -221,7 +244,7 @@ authRouter.post('/forgot-password', async (req, res, next) => {
   }
 });
 
-authRouter.post('/reset-password', async (req, res, next) => {
+authRouter.post('/reset-password', recoveryRateLimit, async (req, res, next) => {
   try {
     if (!config.SUPABASE_URL || !config.SUPABASE_ANON_KEY) {
       return res.status(503).json({

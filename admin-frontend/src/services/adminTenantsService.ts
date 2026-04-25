@@ -1,31 +1,4 @@
-import { useAuthStore } from '../store/authStore';
-
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL?.replace(/\/$/, '') || '';
-
-if (!BACKEND_URL) {
-  throw new Error('VITE_BACKEND_URL nao configurado.');
-}
-
-function getAdminToken() {
-  return useAuthStore.getState().accessToken;
-}
-
-async function adminAuthorizedFetch(path: string, init?: RequestInit) {
-  const token = getAdminToken();
-
-  if (!token) {
-    throw new Error('Super admin nao autenticado');
-  }
-
-  return fetch(`${BACKEND_URL}${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      ...(init?.headers || {}),
-    },
-  });
-}
+import { authorizedFetch } from './httpClient';
 
 export type TenantUserRole = 'user' | 'viewer' | 'admin' | 'super_admin';
 
@@ -65,7 +38,7 @@ export interface CreatedTenantUserResponse {
 
 export const adminTenantsService = {
   async createUser(payload: CreateTenantUserPayload): Promise<CreatedTenantUserResponse> {
-    const response = await adminAuthorizedFetch('/api/tenants/users', {
+    const response = await authorizedFetch('/api/tenants/users', {
       method: 'POST',
       body: JSON.stringify(payload),
     });

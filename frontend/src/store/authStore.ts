@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 
 import { disconnectRealtimeSocket } from '../services/realtimeService';
 
@@ -24,92 +23,79 @@ interface AuthState {
   initialize: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set, get) => ({
-      accessToken: null,
-      user: null,
-      organizationId: null,
-      profile: null,
-      isLoading: true,
-      setAccessToken: (accessToken) => set({ accessToken }),
-      setUser: (user) => set({ user }),
-      setOrganizationId: (organizationId) => set({ organizationId }),
-      setProfile: (profile) => set({ profile }),
-      login: async (email, password) => {
-        const response = await fetch(`${BACKEND_URL}/api/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password }),
-        });
+export const useAuthStore = create<AuthState>()((set, get) => ({
+  accessToken: null,
+  user: null,
+  organizationId: null,
+  profile: null,
+  isLoading: true,
+  setAccessToken: (accessToken) => set({ accessToken }),
+  setUser: (user) => set({ user }),
+  setOrganizationId: (organizationId) => set({ organizationId }),
+  setProfile: (profile) => set({ profile }),
+  login: async (email, password) => {
+    const response = await fetch(`${BACKEND_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
 
-        if (!response.ok) {
-          const payload = await response.json().catch(() => ({}));
-          throw new Error(payload?.message || 'Erro ao fazer login');
-        }
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload?.message || 'Erro ao fazer login');
+    }
 
-        const data = await response.json() as {
-          accessToken: string;
-          user: any;
-          profile: any | null;
-        };
+    const data = await response.json() as {
+      accessToken: string;
+      user: any;
+      profile: any | null;
+    };
 
-        set({
-          accessToken: data.accessToken,
-          user: data.user,
-          profile: data.profile,
-          organizationId: data.profile?.organization_id ?? null,
-          isLoading: false,
-        });
+    set({
+      accessToken: data.accessToken,
+      user: data.user,
+      profile: data.profile,
+      organizationId: data.profile?.organization_id ?? null,
+      isLoading: false,
+    });
+  },
+  signOut: async () => {
+    await fetch(`${BACKEND_URL}/api/auth/logout`, { method: 'POST' });
+    disconnectRealtimeSocket();
+    set({ accessToken: null, user: null, organizationId: null, profile: null });
+  },
+  initialize: async () => {
+    const token = get().accessToken;
+
+    if (!token) {
+      set({ accessToken: null, user: null, organizationId: null, profile: null, isLoading: false });
+      return;
+    }
+
+    const response = await fetch(`${BACKEND_URL}/api/auth/me`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
       },
-      signOut: async () => {
-        await fetch(`${BACKEND_URL}/api/auth/logout`, { method: 'POST' });
-        disconnectRealtimeSocket();
-        set({ accessToken: null, user: null, organizationId: null, profile: null });
-      },
-      initialize: async () => {
-        const token = get().accessToken;
+    });
 
-        if (!token) {
-          set({ accessToken: null, user: null, organizationId: null, profile: null, isLoading: false });
-          return;
-        }
+    if (!response.ok) {
+      set({ accessToken: null, user: null, organizationId: null, profile: null, isLoading: false });
+      return;
+    }
 
-        const response = await fetch(`${BACKEND_URL}/api/auth/me`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+    const payload = await response.json() as {
+      user: any;
+      profile: any | null;
+    };
 
-        if (!response.ok) {
-          set({ accessToken: null, user: null, organizationId: null, profile: null, isLoading: false });
-          return;
-        }
+    const profile = payload.profile || null;
 
-        const payload = await response.json() as {
-          user: any;
-          profile: any | null;
-        };
-
-        const profile = payload.profile || null;
-
-        set({
-          accessToken: token,
-          user: payload.user,
-          profile,
-          organizationId: profile?.organization_id ?? null,
-          isLoading: false,
-        });
-      },
-    }),
-    {
-      name: 'evomais-auth-store',
-      partialize: state => ({
-        accessToken: state.accessToken,
-        user: state.user,
-        organizationId: state.organizationId,
-        profile: state.profile,
-      }),
-    },
-  ),
-);
+    set({
+      accessToken: token,
+      user: payload.user,
+      profile,
+      organizationId: profile?.organization_id ?? null,
+      isLoading: false,
+    });
+  },
+}));

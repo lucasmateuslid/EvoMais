@@ -1,0 +1,77 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist";
+@config "../tailwind.config.js";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --color-bg-deep: #eef3f1;
+    --color-bg-surface: #ffffff;
+    --color-bg-card: #ffffff;
+    --color-bg-input: #f3f6f5;
+    --color-bg-message-out: #d9fdd3;
+    --color-bg-message-in: #ffffff;
+    --color-border: #d7e0dc;
+    --color-border-soft: #ebf0ee;
+    --color-text-primary: #0f172a;
+    --color-text-secondary: #475569;
+    --color-text-muted: #64748b;
+    --color-primary: #0f9d7a;
+    --color-primary-hover: #0b7f63;
+  }
+
+  .dark {
+    --color-bg-deep: #091014;
+    --color-bg-surface: #0f1720;
+    --color-bg-card: #111827;
+    --color-bg-input: #1e293b;
+    --color-bg-message-out: #005c4b;
+    --color-bg-message-in: #1e293b;
+    --color-border: rgba(134, 150, 160, 0.15);
+    --color-border-soft: rgba(134, 150, 160, 0.1);
+    --color-text-primary: #e9edef;
+    --color-text-secondary: #b7c4cd;
+    --color-text-muted: #94a3b8;
+    --color-primary: #13b38c;
+    --color-primary-hover: #00c29a;
+  }
+
+  * {
+    box-sizing: border-box;
+    border-color: var(--color-border);
+    outline-color: color-mix(in srgb, var(--color-primary) 50%, transparent);
+  }
+
+  html {
+    @apply font-sans;
+  }
+
+  body {
+    @apply antialiased;
+    background: radial-gradient(circle at top left, rgba(19, 179, 140, 0.08), transparent 30%),
+      linear-gradient(180deg, rgba(238, 243, 241, 1) 0%, rgba(231, 237, 234, 1) 100%);
+    color: var(--color-text-primary);
+  }
+
+  .dark body {
+    background: radial-gradient(circle at top left, rgba(19, 179, 140, 0.12), transparent 30%),
+      linear-gradient(180deg, rgba(9, 16, 20, 1) 0%, rgba(7, 11, 15, 1) 100%);
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--color-bg-deep);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 3px;
+  }
+}

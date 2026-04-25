@@ -1,15 +1,22 @@
-import { useAuthStore } from '../store/authStore';
+import { getAdminSession } from '../lib/session';
 
+const BACKEND_URL = import.meta.env.VITE_ADMIN_BACKEND_URL?.replace(/\/$/, '') || '';
 const DEFAULT_REQUEST_TIMEOUT_MS = 15000;
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL?.replace(/\/$/, '') || '';
+function requireBackendUrl() {
+  if (!BACKEND_URL) {
+    throw new Error('VITE_ADMIN_BACKEND_URL nao configurado.');
+  }
 
-if (!BACKEND_URL) {
-  throw new Error('VITE_BACKEND_URL não configurado.');
+  return BACKEND_URL;
+}
+
+export function getAdminBackendUrl() {
+  return requireBackendUrl();
 }
 
 async function getAccessToken() {
-  return useAuthStore.getState().accessToken;
+  return getAdminSession()?.accessToken || null;
 }
 
 function withTimeoutSignal(init?: RequestInit) {
@@ -24,16 +31,17 @@ function withTimeoutSignal(init?: RequestInit) {
 }
 
 export async function authorizedFetch(path: string, init?: RequestInit) {
+  const backendUrl = requireBackendUrl();
   const token = await getAccessToken();
 
   if (!token) {
-    throw new Error('Usuário não autenticado');
+    throw new Error('Super admin nao autenticado');
   }
 
   const timed = withTimeoutSignal(init);
 
   try {
-    return await fetch(`${BACKEND_URL}${path}`, {
+    return await fetch(`${backendUrl}${path}`, {
       ...init,
       signal: timed.signal,
       headers: {
@@ -48,10 +56,11 @@ export async function authorizedFetch(path: string, init?: RequestInit) {
 }
 
 export async function publicFetch(path: string, init?: RequestInit) {
+  const backendUrl = requireBackendUrl();
   const timed = withTimeoutSignal(init);
 
   try {
-    return await fetch(`${BACKEND_URL}${path}`, {
+    return await fetch(`${backendUrl}${path}`, {
       ...init,
       signal: timed.signal,
       headers: {

@@ -5,13 +5,19 @@
   "scripts": {
     "dev": "npm run dev --prefix frontend",
     "dev:frontend": "npm run dev --prefix frontend",
+    "dev:admin-frontend": "npm run dev --prefix admin-frontend",
     "dev:backend": "npm run dev --prefix backend",
+    "dev:admin-backend": "npm run dev:admin --prefix backend",
     "build": "npm run build --prefix frontend",
     "build:frontend": "npm run build --prefix frontend",
+    "build:admin-frontend": "npm run build --prefix admin-frontend",
     "build:backend": "npm run build --prefix backend",
+    "build:admin-backend": "npm run build:admin --prefix backend",
     "start:backend": "npm run start --prefix backend",
+    "start:admin-backend": "npm run start:admin --prefix backend",
     "lint": "npm run lint --prefix frontend",
     "install:frontend": "npm install --prefix frontend",
+    "install:admin-frontend": "npm install --prefix admin-frontend",
     "install:backend": "npm install --prefix backend"
   }
 }

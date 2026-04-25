@@ -19,7 +19,10 @@ async function proxyEvolutionRequest(path, options) {
             .json()
             .catch(async () => ({ raw: await response.text().catch(() => '') }));
         if (!response.ok) {
-            throw new Error(`Evolution request failed: ${response.status}`);
+            const errorMessage = typeof payload === 'object' && payload !== null
+                ? JSON.stringify(payload)
+                : String(payload);
+            throw new Error(`Evolution request failed: ${response.status} ${errorMessage}`);
         }
         return payload;
     }
@@ -55,7 +58,11 @@ export async function createEvolutionInstance(request) {
     }
     catch (error) {
         evolutionCircuitBreaker.recordFailure();
-        logger.warn({ error, instanceName: request.instanceName }, 'Evolution instance creation failed');
+        logger.warn({
+            errorMessage: error instanceof Error ? error.message : String(error),
+            errorStack: error instanceof Error ? error.stack : undefined,
+            instanceName: request.instanceName,
+        }, 'Evolution instance creation failed');
         return {
             status: 'queued',
             message: 'Evolution API unavailable. Instance creation queued for retry.',
@@ -89,7 +96,11 @@ export async function reconnectEvolutionInstance(instanceName) {
     }
     catch (error) {
         evolutionCircuitBreaker.recordFailure();
-        logger.warn({ error, instanceName }, 'Evolution reconnect failed');
+        logger.warn({
+            errorMessage: error instanceof Error ? error.message : String(error),
+            errorStack: error instanceof Error ? error.stack : undefined,
+            instanceName,
+        }, 'Evolution reconnect failed');
         return {
             status: 'failed',
             message: 'Evolution API unavailable during reconnect.',
@@ -126,7 +137,11 @@ export async function sendEvolutionMessage(request) {
     }
     catch (error) {
         evolutionCircuitBreaker.recordFailure();
-        logger.warn({ error, instanceName: request.instanceName }, 'Evolution message send failed');
+        logger.warn({
+            errorMessage: error instanceof Error ? error.message : String(error),
+            errorStack: error instanceof Error ? error.stack : undefined,
+            instanceName: request.instanceName,
+        }, 'Evolution message send failed');
         return {
             status: 'queued',
             message: 'Evolution API unavailable. Message queued for retry.',

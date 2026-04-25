@@ -31,8 +31,8 @@ export default function ResetPasswordPage() {
     const tokenHashFromHash = hashParams.get('token_hash');
     const typeFromHash = hashParams.get('type');
 
-    const accessTokenFromQuery = searchParams.get('access_token') || searchParams.get('token');
-    const refreshTokenFromQuery = searchParams.get('refresh_token');
+    const accessTokenFromQuery = null;
+    const refreshTokenFromQuery = null;
     const codeFromQuery = searchParams.get('code');
     const tokenHashFromQuery = searchParams.get('token_hash');
     const typeFromQuery = searchParams.get('type');
@@ -52,6 +52,11 @@ export default function ResetPasswordPage() {
 
     if (!resolvedAccessToken && !resolvedCode && !resolvedTokenHash) {
       setError('Token inválido. Link expirado ou corrompido.');
+      return;
+    }
+
+    if (searchParams.get('access_token') || searchParams.get('refresh_token') || searchParams.get('token')) {
+      setError('Link de redefinição inválido. Refaça a recuperação de senha.');
       return;
     }
 

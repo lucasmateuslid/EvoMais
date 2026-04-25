@@ -2,6 +2,8 @@ services:
   backend:
     build:
       context: ./backend
+      args:
+        BUILD_SCRIPT: build
     container_name: evomais-backend
     restart: unless-stopped
     ports:
@@ -10,6 +12,7 @@ services:
       NODE_ENV: production
       PORT: 4000
       CORS_ORIGIN: http://localhost:3000
+      FRONTEND_URL: http://localhost:3000
       REDIS_URL: redis://redis:6379
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
@@ -17,10 +20,44 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       GROQ_API_KEY: ${GROQ_API_KEY}
-      EVOLUTION_API_URL: ${EVOLUTION_API_URL:-http://localhost:8080}
-      EVOLUTION_WEBHOOK_SECRET: ${EVOLUTION_WEBHOOK_SECRET}
+      EVOLUTION_API_URL: ${EVOLUTION_API_URL:-http://evolution-api:8080}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
+      EVOLUTION_WEBHOOK_SECRET: ${EVOLUTION_WEBHOOK_SECRET:-}
       ENABLE_WORKERS: ${ENABLE_WORKERS:-true}
       ENABLE_WEBSOCKETS: ${ENABLE_WEBSOCKETS:-true}
+      TENANT_ROOT_DOMAIN: ${TENANT_ROOT_DOMAIN:-fulana.com}
+      TENANT_LOCAL_ROOT_DOMAIN: ${TENANT_LOCAL_ROOT_DOMAIN:-fulana.local}
+    depends_on:
+      - redis
+
+  backend-admin:
+    build:
+      context: ./backend
+      args:
+        BUILD_SCRIPT: build:admin
+    container_name: evomais-backend-admin
+    restart: unless-stopped
+    command: ["npm", "run", "start:admin"]
+    ports:
+      - "4001:4001"
+    environment:
+      NODE_ENV: production
+      PORT: 4001
+      CORS_ORIGIN: http://localhost:3101
+      FRONTEND_URL: http://localhost:3101
+      REDIS_URL: redis://redis:6379
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      EVOLUTION_API_URL: ${EVOLUTION_API_URL:-http://evolution-api:8080}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
+      EVOLUTION_WEBHOOK_SECRET: ${EVOLUTION_WEBHOOK_SECRET:-}
+      ENABLE_WORKERS: ${ENABLE_WORKERS:-false}
+      ENABLE_WEBSOCKETS: ${ENABLE_WEBSOCKETS:-false}
+      ENABLE_TENANT_SUBDOMAIN: ${ENABLE_TENANT_SUBDOMAIN:-false}
       TENANT_ROOT_DOMAIN: ${TENANT_ROOT_DOMAIN:-fulana.com}
       TENANT_LOCAL_ROOT_DOMAIN: ${TENANT_LOCAL_ROOT_DOMAIN:-fulana.local}
     depends_on:
@@ -31,12 +68,25 @@ services:
       context: ./frontend
       args:
         VITE_BACKEND_URL: http://backend:4000
+        VITE_ADMIN_APP_URL: http://localhost:3101
     container_name: evomais-frontend
     restart: unless-stopped
     ports:
       - "3000:80"
     depends_on:
       - backend
+
+  frontend-admin:
+    build:
+      context: ./admin-frontend
+      args:
+        VITE_ADMIN_BACKEND_URL: http://backend-admin:4001
+    container_name: evomais-admin-frontend
+    restart: unless-stopped
+    ports:
+      - "3101:80"
+    depends_on:
+      - backend-admin
 
   redis:
     image: redis:7-alpine

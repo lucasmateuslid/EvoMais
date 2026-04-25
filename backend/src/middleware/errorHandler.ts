@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { ZodError } from 'zod';
 
 import { AppError } from '../errors/AppError.js';
+import { isProduction } from '../config.js';
 import { logger } from '../logger.js';
 import { getCorrelationId } from '../observability/requestContext.js';
 import { Sentry } from '../sentry.js';
@@ -56,10 +57,14 @@ function toAppError(error: unknown) {
 export function errorHandler(error: unknown, _req: Request, res: Response, _next: NextFunction) {
   const appError = toAppError(error);
   const correlationId = getCorrelationId();
+  const isServerError = appError.statusCode >= 500;
+  const shouldExposeDetails = appError.statusCode < 500 && appError.code === 'validation_error';
+  const safeMessage = isServerError ? 'Unexpected error while processing request.' : appError.message;
 
   logger.error(
     {
-      error,
+      errorMessage: error instanceof Error ? error.message : String(error),
+      errorStack: !isProduction && error instanceof Error ? error.stack : undefined,
       code: appError.code,
       domain: appError.domain,
       statusCode: appError.statusCode,
@@ -77,8 +82,8 @@ export function errorHandler(error: unknown, _req: Request, res: Response, _next
     error: appError.code,
     code: appError.code,
     domain: appError.domain,
-    message: appError.message,
-    details: appError.details,
+    message: safeMessage,
+    details: shouldExposeDetails ? appError.details : undefined,
     correlationId,
   });
 }

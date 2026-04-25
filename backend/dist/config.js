@@ -35,6 +35,7 @@ const configSchema = z.object({
     EVOLUTION_GLOBAL_API_KEY: z.string().optional(),
     EVOLUTION_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(15000),
     WEBHOOK_SECRET: z.string().min(1).optional(),
+    EVOLUTION_WEBHOOK_SECRET: z.string().min(1).optional(),
     SENTRY_DSN: z.string().optional(),
     ENABLE_WORKERS: z.coerce.boolean().default(false),
     LOG_CORRELATION_ID: z.coerce.boolean().default(true),
@@ -43,7 +44,11 @@ const configSchema = z.object({
     TENANT_LOCAL_ROOT_DOMAIN: z.string().default('fulana.local'),
     ENABLE_WEBSOCKETS: z.coerce.boolean().default(true),
 });
-export const config = configSchema.parse(process.env);
+const rawConfig = configSchema.parse(process.env);
+export const config = {
+    ...rawConfig,
+    WEBHOOK_SECRET: rawConfig.WEBHOOK_SECRET ?? rawConfig.EVOLUTION_WEBHOOK_SECRET,
+};
 export const isProduction = config.NODE_ENV === 'production';
 export const backendCapabilities = {
     supabase: Boolean(config.SUPABASE_URL && config.SUPABASE_SERVICE_ROLE_KEY && config.SUPABASE_ANON_KEY),
