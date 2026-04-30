@@ -43,6 +43,7 @@ const configSchema = z.object({
   AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(1800),
   AI_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.2),
   EVOLUTION_API_URL: z.string().url().default('http://localhost:8080'),
+  EVOLUTION_REQUEST_ORIGIN: z.string().url().optional(),
   EVOLUTION_GLOBAL_API_KEY: optionalEnvString(z.string()),
   EVOLUTION_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(15000),
   WEBHOOK_SECRET: optionalEnvString(z.string().min(1)),

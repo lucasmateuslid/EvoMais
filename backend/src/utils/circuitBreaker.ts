@@ -71,6 +71,6 @@ export class CircuitBreaker {
 
 export const evolutionCircuitBreaker = new CircuitBreaker({
   failureThreshold: 3,
-  cooldownMs: 5 * 60 * 1000,
+  cooldownMs: 30 * 1000,
   halfOpenSuccessThreshold: 2,
 });

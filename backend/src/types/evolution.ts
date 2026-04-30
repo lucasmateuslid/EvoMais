@@ -9,7 +9,7 @@ export interface EvolutionMessageRequest {
 }
 
 export interface EvolutionOperationResponse {
-  status: 'queued' | 'sent' | 'failed';
+  status: 'queued' | 'sent' | 'failed' | 'conflict';
   message: string;
   payload?: unknown;
 }

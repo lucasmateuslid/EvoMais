@@ -63,12 +63,13 @@ export function errorHandler(error: unknown, _req: Request, res: Response, _next
 
   logger.error(
     {
-      errorMessage: error instanceof Error ? error.message : String(error),
+      errorMessage: error instanceof Error ? error.message : JSON.stringify(error),
       errorStack: !isProduction && error instanceof Error ? error.stack : undefined,
       code: appError.code,
       domain: appError.domain,
       statusCode: appError.statusCode,
       details: appError.details,
+      rawError: !isProduction ? error : undefined,
       correlationId,
     },
     'handled backend error',

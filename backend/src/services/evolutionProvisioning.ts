@@ -25,6 +25,17 @@ export async function provisionEvolutionInstance(params: {
   });
 
   const creationResponse = await createEvolutionInstance({ instanceName });
+
+  if (creationResponse.status === 'conflict') {
+    await updateEvolutionInstanceRecord(supabase, organizationId, instanceName, {
+      status: 'error',
+      rawPayload: creationResponse.payload ?? null,
+      errorMessage: creationResponse.message,
+    });
+
+    return creationResponse;
+  }
+
   const creationQrCode = extractEvolutionQrCode(creationResponse.payload ?? null);
 
   const evolutionResponse = (creationResponse.status !== 'sent' || !creationQrCode)

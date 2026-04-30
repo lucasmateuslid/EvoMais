@@ -45,10 +45,14 @@ evolutionRouter.post('/instances', async (req, res, next) => {
     const response = await createEvolutionInstance(payload);
 
     await updateEvolutionInstanceRecord(supabase, organizationId, payload.instanceName, {
-      status: response.status === 'sent' ? 'generating_qr' : 'queued',
+      status: response.status === 'sent'
+        ? 'generating_qr'
+        : response.status === 'conflict'
+          ? 'error'
+          : 'queued',
       qrCode: extractEvolutionQrCode(response.payload ?? null),
       rawPayload: response.payload ?? null,
-      errorMessage: response.status === 'queued' ? response.message : null,
+      errorMessage: response.status === 'sent' ? null : response.message,
     });
 
     res.json({

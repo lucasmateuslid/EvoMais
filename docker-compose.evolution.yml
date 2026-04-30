@@ -14,8 +14,14 @@ services:
       AUTHENTICATION_API_KEY: ${AUTHENTICATION_API_KEY:-mude-me}
       # Dentro da rede Docker, use o nome do servico Redis
       CACHE_REDIS_URI: ${CACHE_REDIS_URI:-redis://redis:6379/6}
+      # A imagem v2.1.1 executa migracoes no boot e exige URI nao vazia
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://evolution:evolution@postgres:5432/evolution?schema=public
     depends_on:
       redis:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     volumes:
       - evolution_instances:/evolution/instances
@@ -33,6 +39,23 @@ services:
     volumes:
       - evolution_redis_data:/data
 
+  postgres:
+    image: postgres:15-alpine
+    container_name: evolution_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: evolution
+      POSTGRES_USER: evolution
+      POSTGRES_PASSWORD: evolution
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evolution -d evolution"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - evolution_postgres_data:/var/lib/postgresql/data
+
 volumes:
   evolution_instances:
   evolution_redis_data:
+  evolution_postgres_data:

@@ -3,16 +3,30 @@ import { logger } from '../logger.js';
 import { evolutionCircuitBreaker } from '../utils/circuitBreaker.js';
 import type { EvolutionInstanceRequest, EvolutionMessageRequest, EvolutionOperationResponse } from '../types/evolution.js';
 
+class EvolutionRequestError extends Error {
+  constructor(
+    message: string,
+    public readonly statusCode: number,
+    public readonly payload: unknown,
+  ) {
+    super(message);
+    this.name = 'EvolutionRequestError';
+  }
+}
+
 async function proxyEvolutionRequest(path: string, options?: { method?: 'GET' | 'POST'; body?: object }) {
   const method = options?.method ?? 'POST';
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), config.EVOLUTION_REQUEST_TIMEOUT_MS);
+  const origin = config.EVOLUTION_REQUEST_ORIGIN ?? config.FRONTEND_URL;
 
   try {
     const response = await fetch(`${config.EVOLUTION_API_URL}${path}`, {
       method,
       headers: {
         'Content-Type': 'application/json',
+        Origin: origin,
+        Referer: `${origin}/`,
         ...(config.EVOLUTION_GLOBAL_API_KEY ? { apikey: config.EVOLUTION_GLOBAL_API_KEY } : {}),
       },
       signal: controller.signal,
@@ -27,7 +41,7 @@ async function proxyEvolutionRequest(path: string, options?: { method?: 'GET' | 
       const errorMessage = typeof payload === 'object' && payload !== null
         ? JSON.stringify(payload)
         : String(payload);
-      throw new Error(`Evolution request failed: ${response.status} ${errorMessage}`);
+      throw new EvolutionRequestError(`Evolution request failed: ${response.status} ${errorMessage}`, response.status, payload);
     }
 
     return payload;
@@ -64,6 +78,29 @@ export async function createEvolutionInstance(request: EvolutionInstanceRequest)
       payload,
     };
   } catch (error) {
+    const isConflict = error instanceof EvolutionRequestError
+      && error.statusCode === 403
+      && JSON.stringify(error.payload).includes('already in use');
+
+    if (isConflict) {
+      evolutionCircuitBreaker.recordSuccess();
+      logger.warn(
+        {
+          errorMessage: error.message,
+          errorStack: error.stack,
+          instanceName: request.instanceName,
+          statusCode: error.statusCode,
+        },
+        'Evolution instance creation conflict',
+      );
+
+      return {
+        status: 'conflict',
+        message: 'Evolution instance name is already in use.',
+        payload: error.payload,
+      };
+    }
+
     evolutionCircuitBreaker.recordFailure();
     logger.warn(
       {
