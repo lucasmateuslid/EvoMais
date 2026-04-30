@@ -36,3 +36,7 @@ Thumbs.db
 .idea/
 node_modules
 .blackboxcli/
+
+backend/node_modules/
+frontend/node_modules/
+admin-frontend/node_modules/
