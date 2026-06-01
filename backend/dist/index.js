@@ -5,6 +5,7 @@ import { config, backendCapabilities } from './config.js';
 import { closeQueueConnections } from './jobs/queue.js';
 import { startWorkers, stopWorkers } from './jobs/worker.js';
 import { withCorrelationId } from './middleware/correlationId.js';
+import { securityHeaders } from './middleware/securityHeaders.js';
 import { resolveTenantFromHost } from './middleware/tenant.js';
 import { logger } from './logger.js';
 import { initializeRealtime, shutdownRealtime } from './realtime/socket.js';
@@ -52,6 +53,7 @@ app.use(cors({
     origin: config.CORS_ORIGIN,
     credentials: true,
 }));
+app.use(securityHeaders);
 app.use(withCorrelationId);
 app.use(resolveTenantFromHost);
 app.use(express.json({

@@ -57,6 +57,7 @@ export function AppLayout() {
     { name: 'Equipe', href: '/team', icon: MessageSquare },
     { name: 'Métricas', href: '/metrics', icon: BarChart3 },
     { name: 'Relatórios', href: '/reports', icon: FileText },
+    { name: 'Configurações', href: '/settings', icon: Settings },
   ];
 
   const MOCK_NOTIFICATIONS = [

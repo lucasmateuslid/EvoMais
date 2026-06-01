@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 
 import { requireAuth } from '../middleware/auth.js';
@@ -40,6 +41,17 @@ const chatRequestSchema = z.object({
 
 export const aiRouter = Router();
 
+const aiRateLimiter = rateLimit({
+  windowMs: 60_000,
+  max: Number(process.env.AI_RATE_LIMIT_PER_USER ?? '20'),
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: any) => req.userId || req.ip,
+  message: {
+    error: 'Too many AI requests. Please wait a minute and try again.',
+  },
+});
+
 aiRouter.use(requireAuth);
 
 function normalizePreview(text: string, maxLength = 180) {
@@ -74,7 +86,7 @@ function buildContextPreview(context: ChatRequest['context']) {
   };
 }
 
-aiRouter.post('/chat', async (req, res, next) => {
+aiRouter.post('/chat', aiRateLimiter, async (req, res, next) => {
   const startedAt = Date.now();
 
   try {

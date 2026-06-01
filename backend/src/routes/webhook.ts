@@ -77,6 +77,17 @@ function normalizePhone(value: string | null | undefined) {
   return String(value || '').replace(/\D/g, '');
 }
 
+function createIdempotencyKey(eventType: string, instanceName: string | null, rawBody: string) {
+  return crypto
+    .createHash('sha256')
+    .update(`${eventType}:${instanceName || 'unknown'}:${rawBody}`)
+    .digest('hex');
+}
+
+function isUniqueViolation(error: unknown) {
+  return Boolean(error && typeof error === 'object' && 'code' in error && (error as { code?: string }).code === '23505');
+}
+
 function shouldSyncInboundMessage(eventType: string) {
   const normalized = eventType.toLowerCase();
 
@@ -210,13 +221,33 @@ webhookRouter.post('/evolution', async (req, res, next) => {
     const eventType = normalizeEventType(payload);
     const instanceName = normalizeInstanceName(payload);
     const organizationId = instanceName ? await resolveOrganizationForInstance(adminSupabase, instanceName) : null;
+    const idempotencyKey = createIdempotencyKey(eventType, instanceName, rawBody);
 
-    const webhookLog = await createEvolutionWebhookLog(adminSupabase, {
-      organizationId,
-      eventType,
-      payload,
-      status: 'received',
-    });
+    let webhookLog;
+
+    try {
+      webhookLog = await createEvolutionWebhookLog(adminSupabase, {
+        organizationId,
+        eventType,
+        idempotencyKey,
+        instanceName,
+        messageId: normalizeMessageId(payload),
+        payload,
+        status: 'received',
+      });
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        logger.info({ eventType, instanceName, organizationId, idempotencyKey }, 'Duplicate evolution webhook ignored');
+
+        return res.status(200).json({
+          received: true,
+          duplicate: true,
+          eventType,
+        });
+      }
+
+      throw error;
+    }
 
     try {
       if (instanceName && organizationId) {

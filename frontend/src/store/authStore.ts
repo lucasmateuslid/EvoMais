@@ -8,16 +8,28 @@ if (!BACKEND_URL) {
   throw new Error('VITE_BACKEND_URL não configurado.');
 }
 
+type AuthUser = {
+  id?: string;
+  email?: string;
+  [key: string]: unknown;
+};
+
+type AuthProfile = {
+  organization_id?: string | null;
+  role?: string;
+  [key: string]: unknown;
+};
+
 interface AuthState {
   accessToken: string | null;
-  user: any | null;
+  user: AuthUser | null;
   organizationId: string | null;
-  profile: any | null;
+  profile: AuthProfile | null;
   isLoading: boolean;
   setAccessToken: (token: string | null) => void;
-  setUser: (user: any | null) => void;
+  setUser: (user: AuthUser | null) => void;
   setOrganizationId: (id: string | null) => void;
-  setProfile: (profile: any | null) => void;
+  setProfile: (profile: AuthProfile | null) => void;
   login: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   initialize: () => Promise<void>;
@@ -47,8 +59,8 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
     const data = await response.json() as {
       accessToken: string;
-      user: any;
-      profile: any | null;
+      user: AuthUser;
+      profile: AuthProfile | null;
     };
 
     set({
@@ -84,8 +96,8 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     }
 
     const payload = await response.json() as {
-      user: any;
-      profile: any | null;
+      user: AuthUser;
+      profile: AuthProfile | null;
     };
 
     const profile = payload.profile || null;

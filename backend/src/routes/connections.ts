@@ -8,9 +8,14 @@ import { provisionEvolutionInstance } from '../services/evolutionProvisioning.js
 import { generateUniqueConnectionInstanceName } from '../utils/instanceName.js';
 
 const connectionSchema = z.object({
-  name: z.string().min(1),
-  phone: z.string().min(1),
-  instance_name: z.string().min(1).optional(),
+  name: z.string().trim().min(1),
+  phone: z
+    .string()
+    .trim()
+    .min(1)
+    .transform(value => value.replace(/\D/g, ''))
+    .refine(value => value.length >= 10, 'phone must contain at least 10 digits'),
+  instance_name: z.string().trim().min(1).optional(),
   api_provider: z.enum(['evolution', 'whatsmeow']).default('evolution'),
 });
 
@@ -64,7 +69,7 @@ connectionsRouter.post('/', async (req, res, next) => {
       .insert({
         ...payload,
         instance_name: instanceName,
-        phone: payload.phone.replace(/\D/g, ''),
+        phone: payload.phone,
         organization_id: request.organizationId,
         status: 'connecting',
       })

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
@@ -18,6 +19,17 @@ const updateConversationSchema = z.object({
 
 export const chatRouter = Router();
 chatRouter.use(requireAuth);
+
+const sendChatMessageLimiter = rateLimit({
+  windowMs: 60_000,
+  max: Number(process.env.EVOLUTION_RATE_LIMIT_PER_USER ?? '60'),
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: any) => req.userId || req.ip,
+  message: {
+    error: 'Too many chat messages. Please wait a minute and try again.',
+  },
+});
 
 function normalizePhone(value: string | null | undefined) {
   return String(value || '').replace(/\D/g, '');
@@ -233,7 +245,7 @@ chatRouter.patch('/vendors/:vendorId/conversations/:conversationId', async (req,
   }
 });
 
-chatRouter.post('/vendors/:vendorId/conversations/:conversationId/messages', async (req, res, next) => {
+chatRouter.post('/vendors/:vendorId/conversations/:conversationId/messages', sendChatMessageLimiter, async (req, res, next) => {
   try {
     const request = req as AuthenticatedRequest;
     const supabase = request.supabase;

@@ -45,6 +45,15 @@ function normalizeMessageId(payload) {
 function normalizePhone(value) {
     return String(value || '').replace(/\D/g, '');
 }
+function createIdempotencyKey(eventType, instanceName, rawBody) {
+    return crypto
+        .createHash('sha256')
+        .update(`${eventType}:${instanceName || 'unknown'}:${rawBody}`)
+        .digest('hex');
+}
+function isUniqueViolation(error) {
+    return Boolean(error && typeof error === 'object' && 'code' in error && error.code === '23505');
+}
 function shouldSyncInboundMessage(eventType) {
     const normalized = eventType.toLowerCase();
     if (normalized.includes('out')) {
@@ -147,12 +156,30 @@ webhookRouter.post('/evolution', async (req, res, next) => {
         const eventType = normalizeEventType(payload);
         const instanceName = normalizeInstanceName(payload);
         const organizationId = instanceName ? await resolveOrganizationForInstance(adminSupabase, instanceName) : null;
-        const webhookLog = await createEvolutionWebhookLog(adminSupabase, {
-            organizationId,
-            eventType,
-            payload,
-            status: 'received',
-        });
+        const idempotencyKey = createIdempotencyKey(eventType, instanceName, rawBody);
+        let webhookLog;
+        try {
+            webhookLog = await createEvolutionWebhookLog(adminSupabase, {
+                organizationId,
+                eventType,
+                idempotencyKey,
+                instanceName,
+                messageId: normalizeMessageId(payload),
+                payload,
+                status: 'received',
+            });
+        }
+        catch (error) {
+            if (isUniqueViolation(error)) {
+                logger.info({ eventType, instanceName, organizationId, idempotencyKey }, 'Duplicate evolution webhook ignored');
+                return res.status(200).json({
+                    received: true,
+                    duplicate: true,
+                    eventType,
+                });
+            }
+            throw error;
+        }
         try {
             if (instanceName && organizationId) {
                 const status = resolveEvolutionInstanceStatus(eventType, payload);

@@ -29,6 +29,9 @@ export interface EvolutionWebhookLogInput {
   organizationId?: string | null;
   source?: string;
   eventType: string;
+  idempotencyKey?: string | null;
+  instanceName?: string | null;
+  messageId?: string | null;
   payload: unknown;
   status?: 'received' | 'processed' | 'failed' | 'dead';
   errorMessage?: string | null;
@@ -141,6 +144,9 @@ export async function createEvolutionWebhookLog(
       organization_id: input.organizationId ?? null,
       source: input.source ?? 'evolution',
       event_type: input.eventType,
+      idempotency_key: input.idempotencyKey ?? null,
+      instance_name: input.instanceName ?? null,
+      message_id: input.messageId ?? null,
       payload: input.payload,
       status: input.status ?? 'received',
       error_message: input.errorMessage ?? null,

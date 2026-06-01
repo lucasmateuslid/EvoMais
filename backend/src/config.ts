@@ -59,6 +59,10 @@ const configSchema = z.object({
 
 const rawConfig = configSchema.parse(process.env);
 
+if (rawConfig.ENABLE_WORKERS && !rawConfig.REDIS_URL) {
+  throw new Error('ENABLE_WORKERS=true requires REDIS_URL to be configured.');
+}
+
 export const config = {
   ...rawConfig,
   WEBHOOK_SECRET: rawConfig.WEBHOOK_SECRET ?? rawConfig.EVOLUTION_WEBHOOK_SECRET,

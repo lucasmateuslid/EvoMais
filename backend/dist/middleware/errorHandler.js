@@ -1,5 +1,6 @@
 import { ZodError } from 'zod';
 import { AppError } from '../errors/AppError.js';
+import { isProduction } from '../config.js';
 import { logger } from '../logger.js';
 import { getCorrelationId } from '../observability/requestContext.js';
 import { Sentry } from '../sentry.js';
@@ -48,12 +49,17 @@ function toAppError(error) {
 export function errorHandler(error, _req, res, _next) {
     const appError = toAppError(error);
     const correlationId = getCorrelationId();
+    const isServerError = appError.statusCode >= 500;
+    const shouldExposeDetails = appError.statusCode < 500 && appError.code === 'validation_error';
+    const safeMessage = isServerError ? 'Unexpected error while processing request.' : appError.message;
     logger.error({
-        error,
+        errorMessage: error instanceof Error ? error.message : JSON.stringify(error),
+        errorStack: !isProduction && error instanceof Error ? error.stack : undefined,
         code: appError.code,
         domain: appError.domain,
         statusCode: appError.statusCode,
         details: appError.details,
+        rawError: !isProduction ? error : undefined,
         correlationId,
     }, 'handled backend error');
     if (Sentry) {
@@ -63,8 +69,8 @@ export function errorHandler(error, _req, res, _next) {
         error: appError.code,
         code: appError.code,
         domain: appError.domain,
-        message: appError.message,
-        details: appError.details,
+        message: safeMessage,
+        details: shouldExposeDetails ? appError.details : undefined,
         correlationId,
     });
 }

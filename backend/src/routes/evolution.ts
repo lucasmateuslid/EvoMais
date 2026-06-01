@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
@@ -12,16 +13,32 @@ import {
 import type { EvolutionInstanceRequest, EvolutionMessageRequest } from '../types/evolution.js';
 
 const createInstanceSchema = z.object({
-  instanceName: z.string().min(1),
+  instanceName: z.string().trim().min(1),
 });
 
 const sendMessageSchema = z.object({
-  instanceName: z.string().min(1),
-  number: z.string().min(1),
-  text: z.string().min(1),
+  instanceName: z.string().trim().min(1),
+  number: z
+    .string()
+    .trim()
+    .min(1)
+    .transform(value => value.replace(/\D/g, ''))
+    .refine(value => value.length >= 10, 'number must contain at least 10 digits'),
+  text: z.string().trim().min(1),
 });
 
 export const evolutionRouter = Router();
+
+const sendMessageLimiter = rateLimit({
+  windowMs: 60_000,
+  max: Number(process.env.EVOLUTION_RATE_LIMIT_PER_USER ?? '60'),
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: any) => req.userId || req.ip,
+  message: {
+    error: 'Too many Evolution message requests. Please wait a minute and try again.',
+  },
+});
 
 evolutionRouter.use(requireAuth);
 
@@ -90,7 +107,7 @@ evolutionRouter.get('/instances', async (req, res, next) => {
   }
 });
 
-evolutionRouter.post('/messages', async (req, res, next) => {
+evolutionRouter.post('/messages', sendMessageLimiter, async (req, res, next) => {
   try {
     const authRequest = req as AuthenticatedRequest;
     const supabase = authRequest.supabase;
