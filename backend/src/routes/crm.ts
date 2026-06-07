@@ -1,9 +1,21 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
 import { emitTenantEvent } from '../realtime/socket.js';
 import type { DealStage } from '../types/crm.js';
+
+const dealMutationLimiter = rateLimit({
+  windowMs: 60_000,
+  max: Number(process.env.CRM_RATE_LIMIT_PER_USER ?? '60'),
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: any) => req.userId || req.ip,
+  message: {
+    error: 'Too many CRM mutations. Please wait a minute and try again.',
+  },
+});
 
 const dealSchema = z.object({
   stage: z.enum(['prospeccao', 'qualificacao', 'proposta', 'negociacao', 'fechamento']),
@@ -53,7 +65,7 @@ crmRouter.get('/deals', async (req, res, next) => {
   }
 });
 
-crmRouter.post('/deals', async (req, res, next) => {
+crmRouter.post('/deals', dealMutationLimiter, async (req, res, next) => {
   try {
     const request = req as AuthenticatedRequest;
     const supabase = request.supabase;
@@ -87,7 +99,7 @@ crmRouter.post('/deals', async (req, res, next) => {
   }
 });
 
-crmRouter.patch('/deals/:dealId', async (req, res, next) => {
+crmRouter.patch('/deals/:dealId', dealMutationLimiter, async (req, res, next) => {
   try {
     const request = req as AuthenticatedRequest;
     const supabase = request.supabase;

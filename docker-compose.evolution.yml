@@ -1,23 +1,47 @@
-version: '3.9'
-
 services:
   evolution-api:
     container_name: evolution_api
-    image: atendai/evolution-api:v2.1.1
+    image: evoapicloud/evolution-api:latest
     restart: always
     ports:
       - "8080:8080"
-    env_file:
-      - ./backend/.env
     environment:
-      # Variavel minima exigida pela Evolution API
-      AUTHENTICATION_API_KEY: ${AUTHENTICATION_API_KEY:-mude-me}
-      # Dentro da rede Docker, use o nome do servico Redis
-      CACHE_REDIS_URI: ${CACHE_REDIS_URI:-redis://redis:6379/6}
-      # A imagem v2.1.1 executa migracoes no boot e exige URI nao vazia
+      # Auth global da Evolution
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:?defina EVOLUTION_API_KEY no .env.evolution}
+
+      # Redis interno da Evolution (db 6 reservado para ela)
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://redis:6379/6
+      CACHE_REDIS_PREFIX_KEY: evolution
+      CACHE_REDIS_SAVE_INSTANCES: "false"
+      CACHE_LOCAL_ENABLED: "false"
+
+      # Postgres dedicado para a Evolution
       DATABASE_ENABLED: "true"
       DATABASE_PROVIDER: postgresql
       DATABASE_CONNECTION_URI: postgresql://evolution:evolution@postgres:5432/evolution?schema=public
+      DATABASE_CONNECTION_CLIENT_NAME: evolution_exchange
+      DATABASE_SAVE_DATA_INSTANCE: "true"
+      DATABASE_SAVE_DATA_NEW_MESSAGE: "true"
+      DATABASE_SAVE_MESSAGE_UPDATE: "true"
+      DATABASE_SAVE_DATA_CONTACTS: "true"
+      DATABASE_SAVE_DATA_CHATS: "true"
+      DATABASE_SAVE_DATA_LABELS: "true"
+      DATABASE_SAVE_DATA_HISTORIC: "true"
+
+      # Webhook global apontando para o nosso backend (rodando no host)
+      WEBHOOK_GLOBAL_ENABLED: "true"
+      WEBHOOK_GLOBAL_URL: ${BACKEND_WEBHOOK_URL:-http://host.docker.internal:4000/webhook/evolution}
+      WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS: "false"
+      WEBHOOK_EVENTS_MESSAGES_UPSERT: "true"
+      WEBHOOK_EVENTS_MESSAGES_UPDATE: "true"
+      WEBHOOK_EVENTS_CONNECTION_UPDATE: "true"
+      WEBHOOK_EVENTS_QRCODE_UPDATED: "true"
+      WEBHOOK_EVENTS_SEND_MESSAGE: "true"
+      WEBHOOK_EVENTS_CONTACTS_UPSERT: "true"
+      WEBHOOK_EVENTS_CHATS_UPSERT: "true"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       redis:
         condition: service_healthy
@@ -31,6 +55,9 @@ services:
     container_name: evolution_redis
     restart: always
     command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      # Exposto para o backend rodando no host (db 0 fica livre para BullMQ)
+      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s

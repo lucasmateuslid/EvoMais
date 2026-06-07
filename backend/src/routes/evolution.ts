@@ -1,9 +1,16 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
-import { createEvolutionInstance, sendEvolutionMessage } from '../services/evolutionService.js';
+import {
+  createEvolutionInstance,
+  deleteEvolutionInstance,
+  reconnectEvolutionInstance,
+  restartEvolutionInstance,
+  sendEvolutionMessage,
+} from '../services/evolutionService.js';
 import {
   createEvolutionInstanceRecord,
   createEvolutionMessageRecord,
@@ -29,6 +36,17 @@ const sendMessageSchema = z.object({
 
 export const evolutionRouter = Router();
 
+const instanceMutationLimiter = rateLimit({
+  windowMs: 60_000,
+  max: Number(process.env.EVOLUTION_INSTANCE_RATE_LIMIT_PER_USER ?? '15'),
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: any) => req.userId || req.ip,
+  message: {
+    error: 'Too many Evolution instance requests. Please wait a minute and try again.',
+  },
+});
+
 const sendMessageLimiter = rateLimit({
   windowMs: 60_000,
   max: Number(process.env.EVOLUTION_RATE_LIMIT_PER_USER ?? '60'),
@@ -42,7 +60,22 @@ const sendMessageLimiter = rateLimit({
 
 evolutionRouter.use(requireAuth);
 
-evolutionRouter.post('/instances', async (req, res, next) => {
+async function loadOwnedInstance(supabase: SupabaseClient, organizationId: string, instanceName: string) {
+  const { data, error } = await supabase
+    .from('evolution_instances')
+    .select('id, instance_name, status, qr_code, connection_id, seller_id')
+    .eq('organization_id', organizationId)
+    .eq('instance_name', instanceName)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+evolutionRouter.post('/instances', instanceMutationLimiter, async (req, res, next) => {
   try {
     const authRequest = req as AuthenticatedRequest;
     const supabase = authRequest.supabase;
@@ -107,6 +140,109 @@ evolutionRouter.get('/instances', async (req, res, next) => {
   }
 });
 
+evolutionRouter.get('/instances/:instanceName/qrcode', async (req, res, next) => {
+  try {
+    const authRequest = req as AuthenticatedRequest;
+    const supabase = authRequest.supabase;
+    const organizationId = authRequest.organizationId;
+
+    if (!supabase || !organizationId) {
+      return res.status(401).json({ error: 'unauthorized' });
+    }
+
+    const instanceName = String(req.params.instanceName);
+    const owned = await loadOwnedInstance(supabase, organizationId, instanceName);
+
+    if (!owned) {
+      return res.status(404).json({ error: 'instance_not_found' });
+    }
+
+    const response = await reconnectEvolutionInstance(instanceName);
+    const qrCode = extractEvolutionQrCode(response.payload ?? null) || owned.qr_code || null;
+
+    if (qrCode) {
+      await updateEvolutionInstanceRecord(supabase, organizationId, instanceName, {
+        qrCode,
+        status: 'qr_ready',
+        rawPayload: response.payload ?? null,
+      });
+    }
+
+    res.json({
+      qrcode: qrCode,
+      status: response.status,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+evolutionRouter.post('/instances/:instanceName/restart', instanceMutationLimiter, async (req, res, next) => {
+  try {
+    const authRequest = req as AuthenticatedRequest;
+    const supabase = authRequest.supabase;
+    const organizationId = authRequest.organizationId;
+
+    if (!supabase || !organizationId) {
+      return res.status(401).json({ error: 'unauthorized' });
+    }
+
+    const instanceName = String(req.params.instanceName);
+    const owned = await loadOwnedInstance(supabase, organizationId, instanceName);
+
+    if (!owned) {
+      return res.status(404).json({ error: 'instance_not_found' });
+    }
+
+    const response = await restartEvolutionInstance(instanceName);
+
+    await updateEvolutionInstanceRecord(supabase, organizationId, instanceName, {
+      status: response.status === 'sent' ? 'generating_qr' : 'queued',
+      rawPayload: response.payload ?? null,
+      errorMessage: response.status === 'sent' ? null : response.message,
+    });
+
+    res.json(response);
+  } catch (error) {
+    next(error);
+  }
+});
+
+evolutionRouter.delete('/instances/:instanceName', instanceMutationLimiter, async (req, res, next) => {
+  try {
+    const authRequest = req as AuthenticatedRequest;
+    const supabase = authRequest.supabase;
+    const organizationId = authRequest.organizationId;
+
+    if (!supabase || !organizationId) {
+      return res.status(401).json({ error: 'unauthorized' });
+    }
+
+    const instanceName = String(req.params.instanceName);
+    const owned = await loadOwnedInstance(supabase, organizationId, instanceName);
+
+    if (!owned) {
+      return res.status(404).json({ error: 'instance_not_found' });
+    }
+
+    const response = await deleteEvolutionInstance(instanceName);
+
+    const { error: deleteError } = await supabase
+      .from('evolution_instances')
+      .delete()
+      .eq('id', owned.id)
+      .eq('organization_id', organizationId);
+
+    if (deleteError) {
+      return next(deleteError);
+    }
+
+    res.json(response);
+  } catch (error) {
+    next(error);
+  }
+});
+
 evolutionRouter.post('/messages', sendMessageLimiter, async (req, res, next) => {
   try {
     const authRequest = req as AuthenticatedRequest;
@@ -118,6 +254,12 @@ evolutionRouter.post('/messages', sendMessageLimiter, async (req, res, next) => 
     }
 
     const payload: EvolutionMessageRequest = sendMessageSchema.parse(req.body);
+
+    const owned = await loadOwnedInstance(supabase, organizationId, payload.instanceName);
+    if (!owned) {
+      return res.status(404).json({ error: 'instance_not_found' });
+    }
+
     const response = await sendEvolutionMessage(payload);
 
     await createEvolutionMessageRecord(supabase, {

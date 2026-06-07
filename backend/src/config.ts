@@ -10,11 +10,30 @@ const optionalEnvString = (schema: z.ZodString) =>
     schema.optional(),
   );
 
+const envBoolean = (defaultValue: boolean) =>
+  z.preprocess(value => {
+    if (typeof value === 'boolean') return value;
+    if (typeof value !== 'string') return defaultValue;
+    const normalized = value.trim().toLowerCase();
+    if (['true', '1', 'yes', 'y', 'on'].includes(normalized)) return true;
+    if (['false', '0', 'no', 'n', 'off', ''].includes(normalized)) return false;
+    return defaultValue;
+  }, z.boolean());
+
 const configSchema = z.object({
   PORT: z.coerce.number().default(4000),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  CORS_ORIGIN: z.string().default('http://localhost:5173'),
+  CORS_ORIGIN: z
+    .string()
+    .default('http://localhost:5173')
+    .transform(value =>
+      value
+        .split(',')
+        .map(item => item.trim())
+        .filter(Boolean),
+    ),
   FRONTEND_URL: z.string().url().default('http://localhost:5173'),
+  TRUST_PROXY: z.coerce.number().int().nonnegative().default(1),
   SUPABASE_URL: optionalEnvString(z.string().url()),
   SUPABASE_ANON_KEY: optionalEnvString(z.string().min(1)),
   SUPABASE_SERVICE_ROLE_KEY: optionalEnvString(z.string().min(1)),
@@ -48,13 +67,14 @@ const configSchema = z.object({
   EVOLUTION_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(15000),
   WEBHOOK_SECRET: optionalEnvString(z.string().min(1)),
   EVOLUTION_WEBHOOK_SECRET: optionalEnvString(z.string().min(1)),
+  WEBHOOK_SIGNATURE_REQUIRED: envBoolean(true),
   SENTRY_DSN: optionalEnvString(z.string()),
-  ENABLE_WORKERS: z.coerce.boolean().default(false),
-  LOG_CORRELATION_ID: z.coerce.boolean().default(true),
-  ENABLE_TENANT_SUBDOMAIN: z.coerce.boolean().default(true),
+  ENABLE_WORKERS: envBoolean(false),
+  LOG_CORRELATION_ID: envBoolean(true),
+  ENABLE_TENANT_SUBDOMAIN: envBoolean(true),
   TENANT_ROOT_DOMAIN: z.string().default('fulana.com'),
   TENANT_LOCAL_ROOT_DOMAIN: z.string().default('fulana.local'),
-  ENABLE_WEBSOCKETS: z.coerce.boolean().default(true),
+  ENABLE_WEBSOCKETS: envBoolean(true),
 });
 
 const rawConfig = configSchema.parse(process.env);

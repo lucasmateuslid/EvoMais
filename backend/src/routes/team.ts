@@ -10,7 +10,7 @@ const inviteMemberSchema = z.object({
   email: z.string().email(),
   name: z.string().min(1),
   phone: z.string().optional(),
-  role: memberRoleSchema.default('admin'),
+  role: memberRoleSchema.default('user'),
 });
 
 const updateMemberSchema = z.object({
@@ -19,6 +19,16 @@ const updateMemberSchema = z.object({
   role: memberRoleSchema.optional(),
   status: z.string().optional(),
 });
+
+function canAssignRole(currentRole: string | null | undefined, targetRole: string | undefined) {
+  if (!targetRole) {
+    return true;
+  }
+  if (currentRole === 'super_admin') {
+    return true;
+  }
+  return targetRole !== 'admin';
+}
 
 async function getCurrentProfile(request: AuthenticatedRequest) {
   if (!request.userId) return null;
@@ -72,6 +82,13 @@ teamRouter.post('/members/invite', async (req, res, next) => {
 
     const payload = inviteMemberSchema.parse(req.body);
 
+    if (!canAssignRole(current.role, payload.role)) {
+      return res.status(403).json({
+        error: 'forbidden',
+        message: 'Only super admins can invite admin members.',
+      });
+    }
+
     const authAdmin = adminSupabase.auth.admin as any;
     const { data: inviteResult, error: inviteError } = await authAdmin.inviteUserByEmail(payload.email, {
       data: {
@@ -122,9 +139,16 @@ teamRouter.patch('/members/:profileId', async (req, res, next) => {
 
     const payload = updateMemberSchema.parse(req.body);
 
+    if (!canAssignRole(current.role, payload.role)) {
+      return res.status(403).json({
+        error: 'forbidden',
+        message: 'Only super admins can promote members to admin.',
+      });
+    }
+
     const { data: target, error: targetError } = await adminSupabase
       .from('profiles')
-      .select('id, organization_id')
+      .select('id, organization_id, role')
       .eq('id', req.params.profileId)
       .maybeSingle();
 
@@ -134,6 +158,13 @@ teamRouter.patch('/members/:profileId', async (req, res, next) => {
 
     if (current.role !== 'super_admin' && target.organization_id !== current.organization_id) {
       return res.status(403).json({ error: 'forbidden' });
+    }
+
+    if (current.role !== 'super_admin' && target.role === 'super_admin') {
+      return res.status(403).json({
+        error: 'forbidden',
+        message: 'Only super admins can edit super admin members.',
+      });
     }
 
     const { data, error } = await adminSupabase

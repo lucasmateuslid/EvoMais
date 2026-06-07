@@ -17,6 +17,9 @@ type AuthUser = {
 type AuthProfile = {
   organization_id?: string | null;
   role?: string;
+  name?: string | null;
+  email?: string | null;
+  phone?: string | null;
   [key: string]: unknown;
 };
 

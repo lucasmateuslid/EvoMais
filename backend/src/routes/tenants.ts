@@ -113,10 +113,14 @@ tenantsRouter.get('/', async (req, res, next) => {
       });
     }
 
+    const limit = Math.min(Number(req.query.limit ?? 50), 200);
+    const offset = Math.max(Number(req.query.offset ?? 0), 0);
+
     const query = adminSupabase
       .from('tenants')
       .select('id, organization_id, subdomain, domain, status, created_at, organizations(id, name, email, plan, status, max_users, created_at)')
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
 
     const { data, error } = isSuperAdmin(currentProfile)
       ? await query
@@ -256,7 +260,7 @@ tenantsRouter.post('/users', async (req, res, next) => {
 
     const { data: organization, error: organizationError } = await adminSupabase
       .from('organizations')
-      .select('id, name, email, status')
+      .select('id, name, email, status, max_users')
       .eq('id', organizationId)
       .maybeSingle();
 
@@ -266,6 +270,24 @@ tenantsRouter.post('/users', async (req, res, next) => {
 
     if (!organization) {
       return res.status(404).json({ error: 'organization_not_found' });
+    }
+
+    if (organization.max_users && Number.isFinite(organization.max_users)) {
+      const { count: currentCount, error: countError } = await adminSupabase
+        .from('profiles')
+        .select('id', { count: 'exact', head: true })
+        .eq('organization_id', organizationId);
+
+      if (countError) {
+        return next(countError);
+      }
+
+      if ((currentCount ?? 0) >= organization.max_users) {
+        return res.status(409).json({
+          error: 'plan_limit_reached',
+          message: `Organization plan limit (${organization.max_users}) reached.`,
+        });
+      }
     }
 
     const authAdmin = adminSupabase.auth.admin as {
@@ -338,8 +360,11 @@ tenantsRouter.patch('/:tenantId', async (req, res, next) => {
       ...payload,
     };
 
-    if (payload.subdomain && !payload.domain) {
-      updates.domain = `${payload.subdomain.toLowerCase()}.${config.TENANT_ROOT_DOMAIN}`;
+    if (payload.subdomain) {
+      updates.subdomain = payload.subdomain.toLowerCase();
+      if (!payload.domain) {
+        updates.domain = `${payload.subdomain.toLowerCase()}.${config.TENANT_ROOT_DOMAIN}`;
+      }
     }
 
     const { data, error } = await adminSupabase

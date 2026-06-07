@@ -1,12 +1,23 @@
 import crypto from 'node:crypto';
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
 import { adminSupabase } from '../services/supabase.js';
-import { createEvolutionInstanceRecord, createEvolutionMessageRecord, createEvolutionOrderRecord, createEvolutionWebhookLog, resolveOrganizationForInstance, updateEvolutionInstanceRecord, updateEvolutionWebhookLog, } from '../services/evolutionPersistence.js';
+import { createEvolutionMessageRecord, createEvolutionOrderRecord, createEvolutionWebhookLog, resolveOrganizationForInstance, updateEvolutionInstanceRecord, updateEvolutionWebhookLog, } from '../services/evolutionPersistence.js';
 const webhookPayloadSchema = z.record(z.string(), z.unknown());
 export const webhookRouter = Router();
+const evolutionWebhookLimiter = rateLimit({
+    windowMs: 60_000,
+    max: Number(process.env.WEBHOOK_RATE_LIMIT_PER_IP ?? '600'),
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+        error: 'too_many_requests',
+        message: 'Too many webhook events. Please slow down.',
+    },
+});
 function buildSignature(rawBody, secret) {
     const digest = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
     return `sha256=${digest}`;
@@ -129,28 +140,33 @@ function resolveOrderPayload(payload) {
         notes: getPayloadValue(order, ['notes', 'comment']),
     };
 }
-webhookRouter.post('/evolution', async (req, res, next) => {
+webhookRouter.post('/evolution', evolutionWebhookLimiter, async (req, res, next) => {
     try {
-        if (!config.WEBHOOK_SECRET) {
-            return res.status(503).json({
-                error: 'webhook_not_configured',
-                message: 'WEBHOOK_SECRET is required to process webhook events.',
-            });
-        }
-        const signature = String(req.header('x-webhook-signature') || '');
-        if (!signature) {
-            return res.status(401).json({
-                error: 'invalid_signature',
-                message: 'Webhook signature is required.',
-            });
-        }
         const request = req;
         const rawBody = request.rawBody || JSON.stringify(req.body || {});
-        if (!isSignatureValid(rawBody, signature, config.WEBHOOK_SECRET)) {
-            return res.status(401).json({
-                error: 'invalid_signature',
-                message: 'Webhook signature is invalid.',
-            });
+        if (config.WEBHOOK_SIGNATURE_REQUIRED) {
+            if (!config.WEBHOOK_SECRET) {
+                return res.status(503).json({
+                    error: 'webhook_not_configured',
+                    message: 'WEBHOOK_SECRET is required to process webhook events.',
+                });
+            }
+            const signature = String(req.header('x-webhook-signature') || '');
+            if (!signature) {
+                return res.status(401).json({
+                    error: 'invalid_signature',
+                    message: 'Webhook signature is required.',
+                });
+            }
+            if (!isSignatureValid(rawBody, signature, config.WEBHOOK_SECRET)) {
+                return res.status(401).json({
+                    error: 'invalid_signature',
+                    message: 'Webhook signature is invalid.',
+                });
+            }
+        }
+        else {
+            logger.debug('Evolution webhook signature check disabled by configuration');
         }
         const payload = webhookPayloadSchema.parse(req.body);
         const eventType = normalizeEventType(payload);
@@ -185,14 +201,6 @@ webhookRouter.post('/evolution', async (req, res, next) => {
                 const status = resolveEvolutionInstanceStatus(eventType, payload);
                 const qrCode = getPayloadValue(payload, ['qr', 'qrcode', 'qrCode']);
                 const errorMessage = getPayloadValue(payload, ['error', 'errorMessage', 'reason']);
-                await createEvolutionInstanceRecord(adminSupabase, {
-                    organizationId,
-                    instanceName,
-                    status,
-                    qrCode,
-                    errorMessage,
-                    rawPayload: payload,
-                });
                 await updateEvolutionInstanceRecord(adminSupabase, organizationId, instanceName, {
                     status,
                     qrCode,

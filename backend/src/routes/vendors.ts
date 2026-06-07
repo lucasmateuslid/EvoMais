@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
@@ -10,6 +11,17 @@ import { generateUniqueConnectionInstanceName } from '../utils/instanceName.js';
 export const vendorsRouter = Router();
 vendorsRouter.use(requireAuth);
 
+const createVendorLimiter = rateLimit({
+  windowMs: 60_000,
+  max: Number(process.env.VENDORS_RATE_LIMIT_PER_USER ?? '10'),
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: any) => req.userId || req.ip,
+  message: {
+    error: 'Too many vendor creation requests. Please wait a minute and try again.',
+  },
+});
+
 const createVendorSchema = z.object({
   name: z.string().min(1),
   email: z.string().email(),
@@ -20,7 +32,7 @@ const createVendorSchema = z.object({
   api_provider: z.enum(['evolution', 'whatsmeow']).default('evolution'),
 });
 
-vendorsRouter.post('/', async (req, res, next) => {
+vendorsRouter.post('/', createVendorLimiter, async (req, res, next) => {
   try {
     const request = req as AuthenticatedRequest;
     const supabase = request.supabase;
@@ -93,9 +105,11 @@ vendorsRouter.post('/', async (req, res, next) => {
       connection: createdConnection,
     });
 
-    emitTenantEvent(request.organizationId, 'connections:updated', {
-      connection: createdConnection,
-    });
+    if (createdConnection) {
+      emitTenantEvent(request.organizationId, 'connections:updated', {
+        connection: createdConnection,
+      });
+    }
 
     res.status(201).json({
       seller,

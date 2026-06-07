@@ -11,7 +11,7 @@ import { logger } from './logger.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { adminRouter } from './routes/admin.js';
-import { authRouter } from './routes/auth.js';
+import { createAuthRouter } from './routes/auth.js';
 import { healthRouter } from './routes/health.js';
 import { tenantRouter, tenantsRouter } from './routes/tenants.js';
 import { initializeSentry } from './sentry.js';
@@ -29,6 +29,8 @@ if (backendCapabilities.ai) {
 }
 
 const app = express();
+
+app.set('trust proxy', config.TRUST_PROXY);
 
 app.use(
   cors({
@@ -56,7 +58,7 @@ app.get('/', (_req, res) => {
 });
 
 app.use('/health', healthRouter);
-app.use('/api/auth', authRouter);
+app.use('/api/auth', createAuthRouter({ includeSuperAdmin: true }));
 app.use('/api/admin', adminRouter);
 app.use('/api/tenant', tenantRouter);
 app.use('/api/tenants', tenantsRouter);

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
@@ -6,6 +7,17 @@ import { logger } from '../logger.js';
 import { emitTenantEvent } from '../realtime/socket.js';
 import { provisionEvolutionInstance } from '../services/evolutionProvisioning.js';
 import { generateUniqueConnectionInstanceName } from '../utils/instanceName.js';
+
+const connectionMutationLimiter = rateLimit({
+  windowMs: 60_000,
+  max: Number(process.env.CONNECTIONS_RATE_LIMIT_PER_USER ?? '15'),
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: any) => req.userId || req.ip,
+  message: {
+    error: 'Too many connection requests. Please wait a minute and try again.',
+  },
+});
 
 const connectionSchema = z.object({
   name: z.string().trim().min(1),
@@ -52,7 +64,7 @@ connectionsRouter.get('/', async (req, res, next) => {
   }
 });
 
-connectionsRouter.post('/', async (req, res, next) => {
+connectionsRouter.post('/', connectionMutationLimiter, async (req, res, next) => {
   try {
     const request = req as AuthenticatedRequest;
     const supabase = request.supabase;
@@ -125,7 +137,7 @@ connectionsRouter.post('/', async (req, res, next) => {
   }
 });
 
-connectionsRouter.post('/:connectionId/connect', async (req, res, next) => {
+connectionsRouter.post('/:connectionId/connect', connectionMutationLimiter, async (req, res, next) => {
   try {
     const request = req as AuthenticatedRequest;
     const supabase = request.supabase;
@@ -257,16 +269,6 @@ connectionsRouter.delete('/:connectionId', async (req, res, next) => {
       return res.status(401).json({ error: 'unauthorized' });
     }
 
-        // load the connection first to get phone number for related seller lookup
-    const { data: connectionRecord, error: connFetchError } = await supabase
-      .from('connections')
-      .select('*')
-      .eq('id', req.params.connectionId)
-      .eq('organization_id', request.organizationId)
-      .maybeSingle();
-
-    if (connFetchError) return next(connFetchError);
-
     const { error: deleteError } = await supabase
       .from('connections')
       .delete()
@@ -275,52 +277,6 @@ connectionsRouter.delete('/:connectionId', async (req, res, next) => {
 
     if (deleteError) {
       return next(deleteError);
-    }
-
-    // If we have a phone on the connection, try to find matching seller(s)
-    if (connectionRecord?.phone) {
-      const normalizedPhone = String(connectionRecord.phone).replace(/\D/g, '');
-
-      const { data: sellers, error: sellersError } = await supabase
-        .from('sellers')
-        .select('id')
-        .eq('organization_id', request.organizationId)
-        .eq('phone', normalizedPhone);
-
-      if (sellersError) return next(sellersError);
-
-      const sellerIds = (sellers || []).map((s: any) => s.id).filter(Boolean);
-
-      if (sellerIds.length > 0) {
-        // delete messages for these sellers (scope to organization for safety)
-        const { data: deletedMessages, error: delMsgError } = await supabase
-          .from('messages')
-          .delete()
-          .in('seller_id', sellerIds)
-          .eq('organization_id', request.organizationId)
-          .select('id, conversation_id');
-
-        if (delMsgError) return next(delMsgError);
-
-        // delete conversations for these sellers and capture deleted conversation ids
-        const { data: deletedConversations, error: delConvError } = await supabase
-          .from('conversations')
-          .delete()
-          .in('seller_id', sellerIds)
-          .eq('organization_id', request.organizationId)
-          .select('id');
-
-        if (delConvError) return next(delConvError);
-
-        const deletedConversationIds = (deletedConversations || []).map((c: any) => c.id);
-
-        // notify clients that conversations were removed
-        if (deletedConversationIds.length > 0) {
-          emitTenantEvent(request.organizationId, 'conversations:deleted', {
-            conversationIds: deletedConversationIds,
-          });
-        }
-      }
     }
 
     emitTenantEvent(request.organizationId, 'connections:deleted', {
@@ -332,7 +288,3 @@ connectionsRouter.delete('/:connectionId', async (req, res, next) => {
     next(error);
   }
 });
-
-
-// PATCH_MARKER_REMOVE_CHATS
-

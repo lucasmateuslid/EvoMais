@@ -288,24 +288,26 @@ chatRouter.post('/vendors/:vendorId/conversations/:conversationId/messages', sen
 
     const sellerPhone = normalizePhone(seller?.phone);
 
-    let messageStatus: 'pending' | 'delivered' = 'delivered';
+    let messageStatus: 'pending' | 'delivered' | 'failed' = 'pending';
+    let sentViaProvider = false;
 
     if (sellerPhone) {
       const { data: connection } = await supabase
         .from('connections')
-        .select('instance_name, api_provider')
+        .select('instance_name, api_provider, status')
         .eq('organization_id', request.organizationId)
         .eq('phone', sellerPhone)
         .order('created_at', { ascending: false })
         .maybeSingle();
 
-      if (connection?.api_provider === 'evolution') {
+      if (connection?.api_provider === 'evolution' && connection.status === 'connected') {
         const evolutionResponse = await sendEvolutionMessage({
           instanceName: connection.instance_name,
           number: normalizePhone(conversation.contact_phone),
           text: payload.text,
         });
 
+        sentViaProvider = true;
         messageStatus = evolutionResponse.status === 'sent' ? 'delivered' : 'pending';
 
         await createEvolutionMessageRecord(supabase, {
@@ -319,6 +321,10 @@ chatRouter.post('/vendors/:vendorId/conversations/:conversationId/messages', sen
           rawPayload: evolutionResponse.payload ?? null,
         });
       }
+    }
+
+    if (!sentViaProvider) {
+      messageStatus = 'pending';
     }
 
     const { data: message, error } = await supabase

@@ -36,7 +36,7 @@ export const evolutionService = {
   async createInstance(payload: CreateEvolutionInstancePayload) {
     const response = await authorizedFetch('/api/evolution/instances', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ instanceName: payload.name }),
     });
 
     if (!response.ok) {

@@ -213,6 +213,84 @@ export async function sendEvolutionMessage(request: EvolutionMessageRequest): Pr
   }
 }
 
+export async function restartEvolutionInstance(instanceName: string): Promise<EvolutionOperationResponse> {
+  if (!evolutionCircuitBreaker.canProceed()) {
+    return {
+      status: 'queued',
+      message: 'Circuit breaker open for Evolution API. Restart queued for later retry.',
+    };
+  }
+
+  try {
+    const payload = await proxyEvolutionRequest(`/instance/restart/${instanceName}`, {
+      method: 'POST',
+      body: {},
+    });
+
+    evolutionCircuitBreaker.recordSuccess();
+
+    return {
+      status: 'sent',
+      message: 'Restart request sent to Evolution API.',
+      payload,
+    };
+  } catch (error) {
+    evolutionCircuitBreaker.recordFailure();
+    logger.warn(
+      {
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+        instanceName,
+      },
+      'Evolution restart failed',
+    );
+
+    return {
+      status: 'failed',
+      message: 'Evolution API unavailable during restart.',
+    };
+  }
+}
+
+export async function deleteEvolutionInstance(instanceName: string): Promise<EvolutionOperationResponse> {
+  if (!evolutionCircuitBreaker.canProceed()) {
+    return {
+      status: 'queued',
+      message: 'Circuit breaker open for Evolution API. Delete queued for later retry.',
+    };
+  }
+
+  try {
+    const payload = await proxyEvolutionRequest(`/instance/delete/${instanceName}`, {
+      method: 'POST',
+      body: {},
+    });
+
+    evolutionCircuitBreaker.recordSuccess();
+
+    return {
+      status: 'sent',
+      message: 'Delete request sent to Evolution API.',
+      payload,
+    };
+  } catch (error) {
+    evolutionCircuitBreaker.recordFailure();
+    logger.warn(
+      {
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+        instanceName,
+      },
+      'Evolution delete failed',
+    );
+
+    return {
+      status: 'failed',
+      message: 'Evolution API unavailable during delete.',
+    };
+  }
+}
+
 export function getEvolutionHealthSnapshot() {
   return {
     breaker: evolutionCircuitBreaker.snapshot(),
